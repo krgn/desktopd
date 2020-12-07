@@ -1,0 +1,14 @@
+[package]
+name = "desktopd"
+version = "0.1.0"
+authors = ["Karsten Gebbert <k@ioctl.it>"]
+edition = "2018"
+
+[dependencies]
+url = "2.2.0"
+futures = "0.3"
+env_logger = "0.8"
+log = "0.4"
+async-std = { version = "1.6", features = ["attributes"] }
+async-i3ipc = { version = "*", features = ["sway"] }
+async-tungstenite = "*"
