@@ -15,7 +15,7 @@ use log::info;
 use notify_rust::Notification;
 use futures::future;
 
-use desktopd::browser::*;
+use desktopd::message::*;
 
 async fn run() -> Result<(), io::Error> {
     let _ = env_logger::try_init();
@@ -39,6 +39,7 @@ async fn accept_connection(stream: TcpStream) {
     let addr = stream
         .peer_addr()
         .expect("connected streams should have a peer address");
+
     info!("Peer address: {}", addr);
 
     let ws_stream = async_tungstenite::accept_async(stream)
@@ -60,13 +61,16 @@ async fn accept_connection(stream: TcpStream) {
             future::ready(!msg.is_close())
         })
         .try_for_each(|msg| {
-            let resp: BrowserResponse = msg
+            let resp: DesktopdResponse = msg
                 .to_text()
-                .map(|txt: &str| serde_json::from_str(txt))
+                .map(|txt: &str| {
+                    info!("parsing desktopd msg: {}", txt);
+                    serde_json::from_str(txt)
+                })
                 .expect("Could not parse message")
                 .expect("Could not parse message"); 
 
-            info!("got a message {:#?}", resp);
+            info!("received {:#?}", resp);
 
             future::ok(())
         });
