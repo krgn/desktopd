@@ -12,6 +12,8 @@ use async_std::task;
 use futures::prelude::*;
 use log::info;
 
+use futures::future;
+
 async fn run() -> Result<(), io::Error> {
     let _ = env_logger::try_init();
     let addr = env::args()
@@ -42,38 +44,47 @@ async fn accept_connection(stream: TcpStream) {
 
     info!("New WebSocket connection: {}", addr);
 
-    let (write, read) = ws_stream.split();
-    read.forward(write)
-        .await
-        .expect("Failed to forward message")
+    let (_write, read) = ws_stream.split();
+    
+    let handle = read
+        .try_filter(|msg| {
+            future::ready(!msg.is_close())
+        })
+        .try_for_each(|msg| {
+            info!("got a message {}", msg);
+            future::ok(())
+        });
+    
+    handle.await.expect("Error during connection")
 }
 
 #[async_std::main]
 async fn main() -> io::Result<()> {
-
     task::spawn(async {
         info!("ws server starting");
         run().await.expect("Yes.");
+        info!("but what now?");
     });
 
-    println!("ie connection");
-
     let mut i3 = I3::connect().await?;
-    let resp = i3.subscribe([Subscribe::Window]).await?;
+    let _resp = i3.subscribe([Subscribe::Window]).await?;
 
-    println!("{:#?}", resp);
+    let _tree = i3.get_tree().await?;
     let mut listener = i3.listen();
+
+    use Event::*;
     while let Ok(event) = listener.next().await {
         match event {
-            Event::Workspace(ev) => println!("workspace change event {:?}", ev),
-            Event::Window(ev) => println!("window event {:?}", ev),
-            Event::Output(ev) => println!("output event {:?}", ev),
-            Event::Mode(ev) => println!("mode event {:?}", ev),
-            Event::BarConfig(ev) => println!("bar config update {:?}", ev),
-            Event::Binding(ev) => println!("binding event {:?}", ev),
-            Event::Shutdown(ev) => println!("shutdown event {:?}", ev),
-            Event::Tick(ev) => println!("tick event {:?}", ev),
+            Workspace(ev) => info!("workspace change event {:?}", ev),
+            Window(ev) => info!("window event {:?}", ev),
+            Output(ev) => info!("output event {:?}", ev),
+            Mode(ev) => info!("mode event {:?}", ev),
+            BarConfig(ev) => info!("bar config update {:?}", ev),
+            Binding(ev) => info!("binding event {:?}", ev),
+            Shutdown(ev) => info!("shutdown event {:?}", ev),
+            Tick(ev) => info!("tick event {:?}", ev),
         }
     }
+
     Ok(())
 }
