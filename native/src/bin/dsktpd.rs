@@ -1,4 +1,4 @@
-use futures::{future, pin_mut, StreamExt};
+use futures::{SinkExt, StreamExt};
 
 use async_std::io;
 use async_std::prelude::*;
@@ -6,9 +6,8 @@ use async_std::task;
 use async_tungstenite::async_std::connect_async;
 use async_tungstenite::tungstenite::protocol::Message;
 
-use futures::SinkExt;
-
 use desktopd::message::*;
+use log::info;
 
 async fn run() {
     let (stdin_tx, stdin_rx) = futures::channel::mpsc::unbounded();
@@ -20,23 +19,23 @@ async fn run() {
 
     println!("WebSocket handshake has been successfully completed");
 
-    let init = DesktopdResponse::Connection(ConnectionType::Cli);
+    let init = DesktopdMessage::Connect(ConnectionType::Cli);
     let msg = Message::Text(serde_json::to_string(&init).unwrap());
 
-    let (mut write, read) = ws_stream.split();
+    let (mut write, mut read) = ws_stream.split();
 
-    write.send(msg).await.expect("Could not send initial message");
+    write.send(msg).await.expect("Could not send init message");
 
-    let stdin_to_ws = stdin_rx.map(Ok).forward(write);
-    let ws_to_stdout = {
-        read.for_each(|message| async {
-            let data = message.unwrap().into_data();
-            async_std::io::stdout().write_all(&data).await.unwrap();
-        })
-    };
+    let response = read.next().await.expect("No response").expect("Error");
 
-    pin_mut!(stdin_to_ws, ws_to_stdout);
-    future::select(stdin_to_ws, ws_to_stdout).await;
+    let msg: DesktopdMessage = response
+        .to_text()
+        .map(|txt| serde_json::from_str(txt))
+        .expect("Could not parse")
+        .expect("Could not parse");
+
+    println!("msg: {:#?}", msg);
+    info!("received: {:#?}", msg)
 }
 
 // Our helper method which will read data from stdin and send it along the

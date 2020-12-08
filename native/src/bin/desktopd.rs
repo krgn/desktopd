@@ -4,18 +4,27 @@ use async_i3ipc::{
     event::{Event, Subscribe},
     I3,
 };
-use std::io;
 use std::env;
+use std::io;
 
-use async_std::net::{TcpListener, TcpStream};
+use async_std::net::{SocketAddr, TcpListener, TcpStream};
 use async_std::task;
+use async_tungstenite::tungstenite::protocol::Message;
 use futures::prelude::*;
 use log::info;
 
+use futures::{
+    channel::mpsc::{unbounded, UnboundedSender},
+    future, pin_mut,
+};
 use notify_rust::Notification;
-use futures::future;
 
 use desktopd::message::*;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+type Tx = UnboundedSender<DesktopdMessage>;
+type PeerMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
 
 async fn run() -> Result<(), io::Error> {
     let _ = env_logger::try_init();
@@ -23,19 +32,21 @@ async fn run() -> Result<(), io::Error> {
         .nth(1)
         .unwrap_or_else(|| "127.0.0.1:8080".to_string());
 
+    let state = PeerMap::new(Mutex::new(HashMap::new()));
+
     // Create the event loop and TCP listener we'll accept connections on.
     let try_socket = TcpListener::bind(&addr).await;
     let listener = try_socket.expect("Failed to bind");
     info!("Listening on: {}", addr);
 
     while let Ok((stream, _)) = listener.accept().await {
-        task::spawn(accept_connection(stream));
+        task::spawn(accept_connection(state.clone(), stream));
     }
 
     Ok(())
 }
 
-async fn accept_connection(stream: TcpStream) {
+async fn accept_connection(peer_map: PeerMap, stream: TcpStream) {
     let addr = stream
         .peer_addr()
         .expect("connected streams should have a peer address");
@@ -54,28 +65,50 @@ async fn accept_connection(stream: TcpStream) {
         .show()
         .expect("Could not show notification");
 
-    let (_write, read) = ws_stream.split();
-    
-    let handle = read
-        .try_filter(|msg| {
-            future::ready(!msg.is_close())
-        })
+    let (tx, rx) = unbounded();
+    let (write, read) = ws_stream.split();
+
+    peer_map.lock().unwrap().insert(addr, tx);
+
+    let answer_channel = rx
+        .map(|msg| serde_json::to_string(&msg).unwrap())
+        .map(|json| Ok(Message::Text(json)))
+        .forward(write);
+
+    let receive_handle = read
+        .try_filter(|msg| future::ready(!msg.is_close()))
         .try_for_each(|msg| {
-            let resp: DesktopdResponse = msg
+            let resp: DesktopdMessage = msg
                 .to_text()
                 .map(|txt: &str| {
                     info!("parsing desktopd msg: {}", txt);
                     serde_json::from_str(txt)
                 })
                 .expect("Could not parse message")
-                .expect("Could not parse message"); 
+                .expect("Could not parse message");
 
             info!("received {:#?}", resp);
 
+            let another_peer_map = peer_map.clone();
+            let peers = another_peer_map.lock().unwrap();
+
+            match resp {
+                DesktopdMessage::Connect(ConnectionType::Cli) => {
+                    let init = DesktopdMessage::ClientList { data: vec![] };
+                    let peer: Tx = peers[&addr].clone();
+                    peer.unbounded_send(init).unwrap();
+                }
+                _ => {}
+            }
+
             future::ok(())
         });
-    
-    handle.await.expect("Error during connection")
+
+    pin_mut!(receive_handle, answer_channel);
+    future::select(answer_channel, receive_handle).await;
+
+    println!("{} disconnected", &addr);
+    peer_map.lock().unwrap().remove(&addr);
 }
 
 #[async_std::main]

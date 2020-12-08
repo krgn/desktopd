@@ -9,6 +9,7 @@ extern crate fuzzy_matcher;
 
 pub mod browser;
 pub mod message;
+pub mod sway;
 
 #[cfg(test)]
 mod tests {
