@@ -1,0 +1,14 @@
+{
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "description": "integrates browser with desktopd",
+  "manifest_version": 2,
+  "name": "desktopd",
+  "permissions": [
+    "tabs"
+  ],
+  "version": "1.0"
+}

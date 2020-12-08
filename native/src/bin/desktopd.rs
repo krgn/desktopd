@@ -12,7 +12,10 @@ use async_std::task;
 use futures::prelude::*;
 use log::info;
 
+use notify_rust::Notification;
 use futures::future;
+
+use desktopd::browser::*;
 
 async fn run() -> Result<(), io::Error> {
     let _ = env_logger::try_init();
@@ -44,6 +47,12 @@ async fn accept_connection(stream: TcpStream) {
 
     info!("New WebSocket connection: {}", addr);
 
+    Notification::new()
+        .summary("desktopd")
+        .body("a new connection was made")
+        .show()
+        .expect("Could not show notification");
+
     let (_write, read) = ws_stream.split();
     
     let handle = read
@@ -51,7 +60,14 @@ async fn accept_connection(stream: TcpStream) {
             future::ready(!msg.is_close())
         })
         .try_for_each(|msg| {
-            info!("got a message {}", msg);
+            let resp: BrowserResponse = msg
+                .to_text()
+                .map(|txt: &str| serde_json::from_str(txt))
+                .expect("Could not parse message")
+                .expect("Could not parse message"); 
+
+            info!("got a message {:#?}", resp);
+
             future::ok(())
         });
     
@@ -74,16 +90,16 @@ async fn main() -> io::Result<()> {
 
     use Event::*;
     while let Ok(event) = listener.next().await {
-        match event {
-            Workspace(ev) => info!("workspace change event {:?}", ev),
-            Window(ev) => info!("window event {:?}", ev),
-            Output(ev) => info!("output event {:?}", ev),
-            Mode(ev) => info!("mode event {:?}", ev),
-            BarConfig(ev) => info!("bar config update {:?}", ev),
-            Binding(ev) => info!("binding event {:?}", ev),
-            Shutdown(ev) => info!("shutdown event {:?}", ev),
-            Tick(ev) => info!("tick event {:?}", ev),
-        }
+        // match event {
+        //     Workspace(ev) => info!("workspace change event {:?}", ev),
+        //     Window(ev) => info!("window event {:?}", ev),
+        //     Output(ev) => info!("output event {:?}", ev),
+        //     Mode(ev) => info!("mode event {:?}", ev),
+        //     BarConfig(ev) => info!("bar config update {:?}", ev),
+        //     Binding(ev) => info!("binding event {:?}", ev),
+        //     Shutdown(ev) => info!("shutdown event {:?}", ev),
+        //     Tick(ev) => info!("tick event {:?}", ev),
+        // }
     }
 
     Ok(())

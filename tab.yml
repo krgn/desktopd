@@ -1,0 +1,11 @@
+tab: desktopd
+doc: "See https://crates.io/crates/tab for info."
+
+workspace:
+  - tab: desktopd/native
+    dir: ./native
+    doc: "rust code"
+
+  - tab: desktopd/browser
+    dir: ./browser
+    doc: "browser extension"
