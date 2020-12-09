@@ -1,19 +1,19 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use async_i3ipc::{
+    event::{Event, WindowChange, WindowData},
     reply::{Node, NodeType},
-    event::{Event, WindowData, WindowChange},
     I3,
 };
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SwayWindow {
-    id: usize,
-    app_id: String,
-    name: String,
-    output: String,
-    workspace: String,
-    class: String,
+    pub id: usize,
+    pub app_id: String,
+    pub name: String,
+    pub output: String,
+    pub workspace: String,
+    pub class: String,
 }
 
 impl SwayWindow {
@@ -22,22 +22,25 @@ impl SwayWindow {
             let empty = String::from("");
             let name = node.name.as_ref().unwrap_or(&empty);
             let app_id = node.app_id.as_ref().unwrap_or(&empty);
-            let class = node.window_properties.as_ref().map(|wp| wp.class.to_owned()).flatten();
+            let class = node
+                .window_properties
+                .as_ref()
+                .map(|wp| wp.class.to_owned())
+                .flatten();
 
-            let win = SwayWindow { 
-                id: node.id, 
+            let win = SwayWindow {
+                id: node.id,
                 app_id: app_id.to_owned(),
                 output: empty.to_owned(),
                 workspace: empty.to_owned(),
-                class:  class.unwrap_or(empty.to_owned()), 
-                name:  name.to_owned()
+                class: class.unwrap_or(empty.to_owned()),
+                name: name.to_owned(),
             };
 
             vec![win]
         } else {
             vec![]
         };
-        
         let siblings = node.nodes.iter().fold(vec![], |mut vec, child| {
             let children = SwayWindow::collect_windows(child);
             vec.extend(children);

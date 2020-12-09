@@ -19,12 +19,78 @@ use futures::{
 };
 use notify_rust::Notification;
 
+use desktopd::browser::*;
 use desktopd::message::*;
+use desktopd::sway::*;
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 type Tx = UnboundedSender<DesktopdMessage>;
-type PeerMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
+type TabId = usize;
+type WindowId = usize;
+
+struct State {
+    peers: HashMap<SocketAddr, Tx>,
+    tabs: HashMap<WindowId, HashMap<TabId, BrowserTab>>,
+    windows: HashMap<WindowId, SwayWindow>,
+}
+
+impl State {
+    fn new() -> State {
+        State {
+            peers: HashMap::new(),
+            tabs: HashMap::new(),
+            windows: HashMap::new(),
+        }
+    }
+
+    fn add_peer(&mut self, addr: SocketAddr, tx: Tx) {
+        self.peers.insert(addr, tx);
+    }
+
+    fn remove_peer(&mut self, addr: &SocketAddr) {
+        self.peers.remove(addr);
+    }
+
+    fn find_peer(&self, addr: &SocketAddr) -> Option<Tx> {
+        if self.peers.contains_key(addr) {
+            Some(self.peers[addr].clone())
+        } else {
+            None
+        }
+    }
+
+    fn add_window(&mut self, win: SwayWindow) {
+        self.windows.insert(win.id, win);
+    }
+
+    fn remove_window(&mut self, id: &WindowId) {
+        self.windows.remove(id);
+    }
+
+    fn clients(&self) -> Vec<DesktopdClient> {
+        self.windows
+            .iter()
+            .map(|(_, win)| DesktopdClient::Window { data: win.clone() })
+            .collect::<Vec<DesktopdClient>>()
+    }
+
+    fn add_tab(&mut self, tab: BrowserTab) {
+        if self.tabs.contains_key(&tab.window_id) {
+            self.tabs.get_mut(&tab.window_id).map(|inner| {
+                inner.insert(tab.id, tab);
+            });
+        } else {
+            let mut map = HashMap::new();
+            let window_id = tab.window_id;
+            map.insert(tab.id, tab);
+            self.tabs.insert(window_id, map);
+        }
+    }
+}
+
+type PeerMap = Arc<Mutex<State>>;
 
 async fn run() -> Result<(), io::Error> {
     let _ = env_logger::try_init();
@@ -32,7 +98,12 @@ async fn run() -> Result<(), io::Error> {
         .nth(1)
         .unwrap_or_else(|| "127.0.0.1:8080".to_string());
 
-    let state = PeerMap::new(Mutex::new(HashMap::new()));
+    let state = PeerMap::new(Mutex::new(State::new()));
+
+    let windows = SwayWindow::fetch().await;
+    for win in windows {
+        state.lock().unwrap().add_window(win);
+    }
 
     // Create the event loop and TCP listener we'll accept connections on.
     let try_socket = TcpListener::bind(&addr).await;
@@ -68,7 +139,7 @@ async fn accept_connection(peer_map: PeerMap, stream: TcpStream) {
     let (tx, rx) = unbounded();
     let (write, read) = ws_stream.split();
 
-    peer_map.lock().unwrap().insert(addr, tx);
+    peer_map.lock().unwrap().add_peer(addr, tx);
 
     let answer_channel = rx
         .map(|msg| serde_json::to_string(&msg).unwrap())
@@ -89,13 +160,14 @@ async fn accept_connection(peer_map: PeerMap, stream: TcpStream) {
 
             info!("received {:#?}", resp);
 
-            let another_peer_map = peer_map.clone();
-            let peers = another_peer_map.lock().unwrap();
+            let inner_peer_map = peer_map.clone();
+            let peers = inner_peer_map.lock().unwrap();
 
             match resp {
                 DesktopdMessage::Connect(ConnectionType::Cli) => {
-                    let init = DesktopdMessage::ClientList { data: vec![] };
-                    let peer: Tx = peers[&addr].clone();
+                    let clients = peers.clients();
+                    let init = DesktopdMessage::ClientList { data: clients };
+                    let peer: Tx = peers.find_peer(&addr).unwrap().clone();
                     peer.unbounded_send(init).unwrap();
                 }
                 _ => {}
@@ -108,7 +180,7 @@ async fn accept_connection(peer_map: PeerMap, stream: TcpStream) {
     future::select(answer_channel, receive_handle).await;
 
     println!("{} disconnected", &addr);
-    peer_map.lock().unwrap().remove(&addr);
+    peer_map.lock().unwrap().remove_peer(&addr);
 }
 
 #[async_std::main]

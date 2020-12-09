@@ -5,19 +5,15 @@ use async_std::prelude::*;
 use async_std::task;
 use async_tungstenite::async_std::connect_async;
 use async_tungstenite::tungstenite::protocol::Message;
+use skim::prelude::*;
 
 use desktopd::message::*;
-use log::info;
+use desktopd::sway::*;
 
-async fn run() {
-    let (stdin_tx, stdin_rx) = futures::channel::mpsc::unbounded();
-    task::spawn(read_stdin(stdin_tx));
-
+async fn run(tx_item: SkimItemSender) {
     let (ws_stream, _) = connect_async("ws://127.0.0.1:8080")
         .await
         .expect("Failed to connect");
-
-    println!("WebSocket handshake has been successfully completed");
 
     let init = DesktopdMessage::Connect(ConnectionType::Cli);
     let msg = Message::Text(serde_json::to_string(&init).unwrap());
@@ -34,25 +30,33 @@ async fn run() {
         .expect("Could not parse")
         .expect("Could not parse");
 
-    println!("msg: {:#?}", msg);
-    info!("received: {:#?}", msg)
-}
-
-// Our helper method which will read data from stdin and send it along the
-// sender provided.
-async fn read_stdin(tx: futures::channel::mpsc::UnboundedSender<Message>) {
-    let mut stdin = io::stdin();
-    loop {
-        let mut buf = vec![0; 1024];
-        let n = match stdin.read(&mut buf).await {
-            Err(_) | Ok(0) => break,
-            Ok(n) => n,
-        };
-        buf.truncate(n);
-        tx.unbounded_send(Message::binary(buf)).unwrap();
+    match msg {
+        DesktopdMessage::ClientList { data } => {
+            for item in data {
+                tx_item.send(Arc::new(item)).unwrap()
+            }
+        }
+        _ => {}
     }
 }
 
 fn main() {
-    task::block_on(run())
+    let (tx_item, rx_item): (SkimItemSender, SkimItemReceiver) = unbounded();
+
+    task::block_on(run(tx_item.clone()));
+
+    let options = SkimOptionsBuilder::default()
+        .height(Some("50%"))
+        .multi(true)
+        .preview(Some("clients")) // preview should be specified to enable preview window
+        .build()
+        .unwrap();
+
+    let selected_items = Skim::run_with(&options, Some(rx_item))
+        .map(|out| out.selected_items)
+        .unwrap_or_else(|| Vec::new());
+
+    for item in selected_items.iter() {
+        println!("{}", item.output());
+    }
 }
