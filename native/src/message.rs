@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::browser::*;
-use crate::sway::*;
+use crate::sway::types::*;
 use skim::prelude::*;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -33,16 +33,24 @@ impl SkimItem for DesktopdClient {
     fn text(&self) -> Cow<str> {
         use DesktopdClient::*;
         match self {
-            Window { data } => Cow::Borrowed(&data.class),
-            Tab { data } => Cow::Borrowed(&data.title),
+            Window { data } => Cow::Owned(format!(
+                "{} {} {} {}",
+                data.id, data.app_id, data.name, data.class,
+            )),
+            Tab { data } => Cow::Owned(format!(
+                "{}.{} {} {}",
+                data.id, data.window_id, data.title, data.url
+            )),
         }
     }
 
     fn preview(&self, _context: PreviewContext) -> ItemPreview {
         use DesktopdClient::*;
         match self {
-            Window { data } => ItemPreview::Text(format!("hello:\n{}", data.class)),
-            Tab { data } => ItemPreview::Text(format!("hello:\n{}", data.title)),
+            Window { data } => {
+                ItemPreview::Text(format!("{} {} {}", data.app_id, data.name, data.class,))
+            }
+            Tab { data } => ItemPreview::Text(format!("{} {}", data.title, data.url)),
         }
     }
 }

@@ -15,6 +15,14 @@ function findTab(props) {
 // ░▀▀▀░▀▀▀░▀▀▀░▀░▀░▀▀▀░░▀░
 
 const chan = new MessageChannel()
+const init = { type: "connect", application: "browser" }
+
+function browserMessage(data) {
+  return JSON.stringify({
+    type: "browser_message",
+    data: data
+  })
+}
 
 function connect() {
   let ws = new WebSocket('ws://localhost:8080')
@@ -26,11 +34,15 @@ function connect() {
 
   // list all tabs and send them to desktopd
   ws.onopen = () => {
+    ws.send(JSON.stringify(init))
+
     listTabs().then((tabs) => {
-      ws.send(JSON.stringify({ 
-        "type": "init",
-        "data": tabs 
-      }))
+      ws.send(
+        browserMessage({ 
+          type: "init",
+          data: tabs 
+        })
+      )
     })
   }
 
@@ -58,77 +70,95 @@ function connect() {
 
 
 browser.tabs.onCreated.addListener((tab) => { 
-  chan.port2.postMessage(JSON.stringify({ 
-    "type": "created",
-    "data": tab 
-  }))
+  chan.port2.postMessage(
+    browserMessage({ 
+      type: "created",
+      data: tab 
+    })
+  )
 })
 
 browser.tabs.onActivated.addListener((o) => { 
-  chan.port2.postMessage(JSON.stringify({ 
-    "type": "activated",
-    "tabId": o.tabId, 
-    "windowId": o.windowId
-  }))
+  chan.port2.postMessage(
+    browserMessage({ 
+      type: "activated",
+      tabId: o.tabId, 
+      windowId: o.windowId
+    })
+  )
 })
 
 browser.tabs.onAttached.addListener((tabId, o) => { 
-  chan.port2.postMessage(JSON.stringify({ 
-    "type": "attached",
-    "tabId": tabId, 
-    "newWindowId": o.newWindowId,
-    "newPosition": o.newPosition
-  }))
+  chan.port2.postMessage(
+    browserMessage({ 
+      type: "attached",
+      tabId: tabId, 
+      newWindowId: o.newWindowId,
+      newPosition: o.newPosition
+    })
+  )
 })
 
 browser.tabs.onDetached.addListener((tabId, o) => { 
-  chan.port2.postMessage(JSON.stringify({ 
-    "type": "detached",
-    "tabId": tabId, 
-    "oldWindowId": o.oldWindowId,
-    "oldPosition": o.oldPosition
-  }))
+  chan.port2.postMessage(
+    browserMessage({ 
+      type: "detached",
+      tabId: tabId, 
+      oldWindowId: o.oldWindowId,
+      oldPosition: o.oldPosition
+    })
+  )
 })
 
 browser.tabs.onHighlighted.addListener((o) => { 
-  chan.port2.postMessage(JSON.stringify({ 
-    "type": "highlighted",
-    "windowId": o.windowId,
-    "tabIds": o.tabIds
-  }))
+  chan.port2.postMessage(
+    browserMessage({ 
+      type: "highlighted",
+      windowId: o.windowId,
+      tabIds: o.tabIds
+    })
+  )
 })
 
 browser.tabs.onMoved.addListener((tabId,o) => { 
-  chan.port2.postMessage(JSON.stringify({ 
-    "type": "moved",
-    "tabId": tabId,
-    "windowId": o.windowId,
-    "fromIndex": o.fromIndex,
-    "toIndex": o.toIndex
-  }))
+  chan.port2.postMessage(
+    browserMessage({ 
+      type: "moved",
+      tabId: tabId,
+      windowId: o.windowId,
+      fromIndex: o.fromIndex,
+      toIndex: o.toIndex
+    })
+  )
 })
 
 browser.tabs.onReplaced.addListener((addedTabId,removedTabId) => { 
-  chan.port2.postMessage(JSON.stringify({ 
-    "type": "replaced",
-    "addedTabId": addedTabId,
-    "removedTabId": removedTabId
-  }))
+  chan.port2.postMessage(
+    browserMessage({ 
+      type: "replaced",
+      addedTabId: addedTabId,
+      removedTabId: removedTabId
+    })
+  )
 })
 
 browser.tabs.onRemoved.addListener((tabId, o) => { 
-  chan.port2.postMessage(JSON.stringify({
-    "type": "removed",
-    "tabId": tabId,
-    "windowId": o.windowId
-  }))
+  chan.port2.postMessage(
+    browserMessage({
+      type: "removed",
+      tabId: tabId,
+      windowId: o.windowId
+    })
+  )
 })
 
 browser.tabs.onUpdated.addListener((_tabId, _info, tab) => { 
-  chan.port2.postMessage(JSON.stringify({
-    "type": "updated",
-    "data": tab
-  }))
+  chan.port2.postMessage(
+    browserMessage({
+      type: "updated",
+      data: tab
+    })
+  )
 })
 
 connect()

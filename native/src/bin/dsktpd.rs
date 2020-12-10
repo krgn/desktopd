@@ -1,14 +1,10 @@
 use futures::{SinkExt, StreamExt};
 
-use async_std::io;
-use async_std::prelude::*;
 use async_std::task;
 use async_tungstenite::async_std::connect_async;
 use async_tungstenite::tungstenite::protocol::Message;
-use skim::prelude::*;
-
 use desktopd::message::*;
-use desktopd::sway::*;
+use skim::prelude::*;
 
 async fn run(tx_item: SkimItemSender) {
     let (ws_stream, _) = connect_async("ws://127.0.0.1:8080")

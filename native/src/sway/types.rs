@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
 use async_i3ipc::{
-    event::{Event, WindowChange, WindowData},
     reply::{Node, NodeType},
     I3,
 };
@@ -17,7 +16,7 @@ pub struct SwayWindow {
 }
 
 impl SwayWindow {
-    fn collect_windows(node: &Node) -> Vec<SwayWindow> {
+    pub fn collect_windows(node: &Node) -> Vec<SwayWindow> {
         let mut this = if node.node_type == NodeType::Con && node.name.is_some() {
             let empty = String::from("");
             let name = node.name.as_ref().unwrap_or(&empty);

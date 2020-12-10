@@ -16,3 +16,5 @@ async-i3ipc = { version = "*", features = ["sway"] }
 async-tungstenite = { version = "*", features = ["async-std-runtime"]}
 notify-rust = "4.0.0"
 skim = "0.9.3"
+async-process = "1.0.1"
+tabular = "0.1.4"
