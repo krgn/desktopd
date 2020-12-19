@@ -19,11 +19,11 @@ function getExtensionInfo() {
 // ░▀▀▀░▀▀▀░▀▀▀░▀░▀░▀▀▀░░▀░
 
 const chan = new MessageChannel()
-const init = { type: "connect", application: "browser" }
+const init = { msg_type: "connect", application: "browser" }
 
 function browserMessage(data) {
   return JSON.stringify({
-    type: "browser_message",
+    msg_type: "browser_message",
     data: data
   })
 }
