@@ -3,13 +3,13 @@ use crate::state::GlobalState;
 use crate::state::Rx;
 use crate::sway::types::SwayWindow;
 use async_i3ipc::{
-    event::{Event, Subscribe, WindowData},
+    event::{Event, Subscribe, WindowChange, WindowData},
     I3,
 };
 use async_std::task;
 use futures::prelude::*;
 use futures::{future, pin_mut};
-use log::debug;
+use log::info;
 use std::io;
 
 async fn initialize_state(state: GlobalState, i3: &mut I3) -> io::Result<()> {
@@ -44,15 +44,30 @@ async fn sway_command_process(rx: Rx) {
 }
 
 fn handle_window_event(state: GlobalState, data: WindowData) {
-    debug!("handleing {:#?} event", data.change);
+    info!("handleing {:#?} event", data.change);
     let windows = SwayWindow::collect_windows(&data.container);
-    for win in windows {
-        state.lock().unwrap().add_window(win)
+    match data.change {
+        WindowChange::Close => {
+            info!("removing window: {:#?}", data.container.id);
+            state.lock().unwrap().remove_window(&data.container.id)
+        }
+        _ => {
+            for win in windows {
+                state.lock().unwrap().add_window(win)
+            }
+        }
     }
 }
 
 async fn sway_event_process(state: GlobalState, i3: I3) {
-    let mut listener = i3.listen();
+    let mut sway = i3;
+
+    let _resp = sway
+        .subscribe([Subscribe::Window])
+        .await
+        .expect("Subscription failed");
+
+    let mut listener = sway.listen();
 
     use Event::*;
     while let Ok(event) = listener.next().await {
@@ -72,7 +87,6 @@ async fn sway_event_process(state: GlobalState, i3: I3) {
 
 pub async fn run(state: GlobalState, rx: Rx) -> io::Result<()> {
     let mut i3 = I3::connect().await?;
-    let _resp = i3.subscribe([Subscribe::Window]).await?;
 
     initialize_state(state.clone(), &mut i3).await?;
 
