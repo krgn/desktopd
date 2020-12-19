@@ -10,6 +10,10 @@ function findTab(props) {
   return browser.tabs.query(props).then((tabs) => tabs[0])
 }
 
+function getExtensionInfo() {
+  return browser.management.getSelf()
+}
+
 // ░█▀▀░█▀█░█▀▀░█░█░█▀▀░▀█▀
 // ░▀▀█░█░█░█░░░█▀▄░█▀▀░░█░
 // ░▀▀▀░▀▀▀░▀▀▀░▀░▀░▀▀▀░░▀░

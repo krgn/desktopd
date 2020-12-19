@@ -1,5 +1,5 @@
 use async_std::net::SocketAddr;
-use futures::channel::mpsc::UnboundedSender;
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -8,6 +8,7 @@ use crate::message::*;
 use crate::sway::types::*;
 
 pub type Tx = UnboundedSender<DesktopdMessage>;
+pub type Rx = UnboundedReceiver<DesktopdMessage>;
 pub type TabId = usize;
 pub type WindowId = usize;
 

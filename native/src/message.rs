@@ -14,14 +14,23 @@ pub enum ConnectionType {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "type")]
+#[serde(tag = "browser_request")]
 pub enum BrowserRequest {
     #[serde(rename = "focus_tab")]
     FocusTab(BrowserTabRef),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "type")]
+#[serde(tag = "cli_request")]
+pub enum CliRequest {
+    #[serde(rename = "focus_tab")]
+    FocusTab(BrowserTabRef),
+    #[serde(rename = "focus_window")]
+    FocusWindow { id: usize },
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "client_type")]
 pub enum DesktopdClient {
     #[serde(rename = "win")]
     Window { data: SwayWindow },
@@ -43,20 +52,10 @@ impl SkimItem for DesktopdClient {
             )),
         }
     }
-
-    fn preview(&self, _context: PreviewContext) -> ItemPreview {
-        use DesktopdClient::*;
-        match self {
-            Window { data } => {
-                ItemPreview::Text(format!("{} {} {}", data.app_id, data.name, data.class,))
-            }
-            Tab { data } => ItemPreview::Text(format!("{} {}", data.title, data.url)),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "type")]
+#[serde(tag = "msg_type")]
 pub enum DesktopdMessage {
     #[serde(rename = "connect")]
     Connect(ConnectionType),
@@ -69,6 +68,9 @@ pub enum DesktopdMessage {
 
     #[serde(rename = "browser_request")]
     BrowserRequest(BrowserRequest),
+
+    #[serde(rename = "cli_request")]
+    CliRequest(CliRequest),
 
     #[serde(rename = "client_list")]
     ClientList { data: Vec<DesktopdClient> },

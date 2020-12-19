@@ -3,10 +3,16 @@ use futures::{SinkExt, StreamExt};
 use async_std::task;
 use async_tungstenite::async_std::connect_async;
 use async_tungstenite::tungstenite::protocol::Message;
+use desktopd::browser::*;
 use desktopd::message::*;
 use skim::prelude::*;
 
-async fn run(tx_item: SkimItemSender) {
+type SinkHole = futures::stream::SplitSink<
+    async_tungstenite::WebSocketStream<async_std::net::TcpStream>,
+    async_tungstenite::tungstenite::Message,
+>;
+
+async fn run(tx_item: SkimItemSender) -> SinkHole {
     let (ws_stream, _) = connect_async("ws://127.0.0.1:8080")
         .await
         .expect("Failed to connect");
@@ -34,17 +40,29 @@ async fn run(tx_item: SkimItemSender) {
         }
         _ => {}
     }
+    write
 }
 
-fn main() {
+struct Foo {}
+
+impl SkimItem for Foo {
+    fn text(&self) -> Cow<str> {
+        unimplemented!()
+    }
+}
+
+#[async_std::main]
+async fn main() {
     let (tx_item, rx_item): (SkimItemSender, SkimItemReceiver) = unbounded();
 
-    task::block_on(run(tx_item.clone()));
+    let mut write_handle = task::block_on(run(tx_item.clone()));
+
+    drop(tx_item);
 
     let options = SkimOptionsBuilder::default()
         .height(Some("50%"))
-        .multi(true)
-        .preview(Some("clients")) // preview should be specified to enable preview window
+        .multi(false)
+        .preview(None)
         .build()
         .unwrap();
 
@@ -53,6 +71,25 @@ fn main() {
         .unwrap_or_else(|| Vec::new());
 
     for item in selected_items.iter() {
-        println!("{}", item.output());
+        if let Some(client) = (**item).as_any().downcast_ref::<DesktopdClient>() {
+            let command = match client {
+                DesktopdClient::Window { data } => {
+                    DesktopdMessage::CliRequest(CliRequest::FocusWindow { id: data.id })
+                }
+                DesktopdClient::Tab { data } => {
+                    DesktopdMessage::CliRequest(CliRequest::FocusTab(BrowserTabRef {
+                        tab_id: data.id,
+                        window_id: data.window_id,
+                    }))
+                }
+            };
+
+            let msg = Message::Text(serde_json::to_string(&command).unwrap());
+
+            write_handle
+                .send(msg)
+                .await
+                .expect("could not send message");
+        }
     }
 }

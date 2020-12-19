@@ -12,9 +12,9 @@ pub struct BrowserTab {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BrowserTabRef {
     #[serde(rename = "tabId")]
-    tab_id: usize,
+    pub tab_id: usize,
     #[serde(rename = "windowId")]
-    window_id: usize,
+    pub window_id: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

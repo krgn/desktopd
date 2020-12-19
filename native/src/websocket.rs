@@ -1,4 +1,4 @@
-use crate::message::{ConnectionType, DesktopdMessage};
+use crate::message::*;
 use crate::state::{GlobalState, Tx};
 use async_std::net::{TcpListener, TcpStream};
 use async_std::task;
@@ -10,7 +10,7 @@ use notify_rust::Notification;
 use std::env;
 use std::io;
 
-pub async fn run(state: GlobalState) -> Result<(), io::Error> {
+pub async fn run(state: GlobalState, sway_tx: Tx) -> Result<(), io::Error> {
     let addr = env::args()
         .nth(1)
         .unwrap_or_else(|| "127.0.0.1:8080".to_string());
@@ -21,13 +21,13 @@ pub async fn run(state: GlobalState) -> Result<(), io::Error> {
     info!("Listening on: {}", addr);
 
     while let Ok((stream, _)) = listener.accept().await {
-        task::spawn(accept_connection(state.clone(), stream));
+        task::spawn(accept_connection(state.clone(), sway_tx.clone(), stream));
     }
 
     Ok(())
 }
 
-async fn accept_connection(state: GlobalState, stream: TcpStream) {
+async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
     let addr = stream
         .peer_addr()
         .expect("connected streams should have a peer address");
@@ -61,7 +61,11 @@ async fn accept_connection(state: GlobalState, stream: TcpStream) {
         .try_for_each(|msg| {
             let resp: DesktopdMessage = msg
                 .to_text()
-                .map(serde_json::from_str)
+                //.map(serde_json::from_str)
+                .map(|txt| {
+                    println!("json: {}", txt);
+                    serde_json::from_str(txt)
+                })
                 .expect("Could not parse message")
                 .expect("Could not parse message");
 
@@ -71,11 +75,15 @@ async fn accept_connection(state: GlobalState, stream: TcpStream) {
             let peers = inner_peer_map.lock().unwrap();
 
             match resp {
+                // a new cli has connected, send the current list of clients
                 DesktopdMessage::Connect(ConnectionType::Cli) => {
                     let clients = peers.clients();
                     let init = DesktopdMessage::ClientList { data: clients };
                     let peer: Tx = peers.find_peer(&addr).unwrap().clone();
                     peer.unbounded_send(init).unwrap();
+                }
+                DesktopdMessage::CliRequest(CliRequest::FocusWindow { .. }) => {
+                    sway_tx.unbounded_send(resp).unwrap();
                 }
                 _ => {}
             }
