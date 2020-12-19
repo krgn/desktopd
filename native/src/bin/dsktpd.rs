@@ -43,14 +43,6 @@ async fn run(tx_item: SkimItemSender) -> SinkHole {
     write
 }
 
-struct Foo {}
-
-impl SkimItem for Foo {
-    fn text(&self) -> Cow<str> {
-        unimplemented!()
-    }
-}
-
 #[async_std::main]
 async fn main() {
     let (tx_item, rx_item): (SkimItemSender, SkimItemReceiver) = unbounded();

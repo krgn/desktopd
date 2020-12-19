@@ -13,7 +13,7 @@ pub type TabId = usize;
 pub type WindowId = usize;
 
 pub struct State {
-    peers: HashMap<SocketAddr, Tx>,
+    peers: HashMap<SocketAddr, (Option<ConnectionType>, Tx)>,
     tabs: HashMap<WindowId, HashMap<TabId, BrowserTab>>,
     windows: HashMap<WindowId, SwayWindow>,
 }
@@ -28,7 +28,20 @@ impl State {
     }
 
     pub fn add_peer(&mut self, addr: SocketAddr, tx: Tx) {
-        self.peers.insert(addr, tx);
+        self.peers.insert(addr, (None, tx));
+    }
+
+    pub fn mark_browser(&mut self, addr: &SocketAddr) {
+        if let Some((_, tx)) = self.peers.remove(addr) {
+            self.peers
+                .insert(*addr, (Some(ConnectionType::Browser), tx));
+        }
+    }
+
+    pub fn mark_cli(&mut self, addr: &SocketAddr) {
+        if let Some((_, tx)) = self.peers.remove(addr) {
+            self.peers.insert(*addr, (Some(ConnectionType::Cli), tx));
+        }
     }
 
     pub fn remove_peer(&mut self, addr: &SocketAddr) {
@@ -37,10 +50,19 @@ impl State {
 
     pub fn find_peer(&self, addr: &SocketAddr) -> Option<Tx> {
         if self.peers.contains_key(addr) {
-            Some(self.peers[addr].clone())
+            Some(self.peers[addr].1.clone())
         } else {
             None
         }
+    }
+
+    pub fn get_browsers(&self) -> Vec<Tx> {
+        self.peers.iter().fold(vec![], |mut out, (_, (t, tx))| {
+            if let Some(ConnectionType::Browser) = t {
+                out.push(tx.clone());
+            }
+            out
+        })
     }
 
     pub fn add_window(&mut self, win: SwayWindow) {
@@ -52,10 +74,21 @@ impl State {
     }
 
     pub fn clients(&self) -> Vec<DesktopdClient> {
-        self.windows
+        let tabs = self
+            .tabs
+            .iter()
+            .flat_map(|(_, inner)| inner.iter().map(|(_, tabs)| tabs))
+            .map(|tab| DesktopdClient::Tab { data: tab.clone() })
+            .collect::<Vec<DesktopdClient>>();
+
+        let mut windows = self
+            .windows
             .iter()
             .map(|(_, win)| DesktopdClient::Window { data: win.clone() })
-            .collect::<Vec<DesktopdClient>>()
+            .collect::<Vec<DesktopdClient>>();
+
+        windows.extend(tabs);
+        windows
     }
 
     pub fn add_tab(&mut self, tab: BrowserTab) {

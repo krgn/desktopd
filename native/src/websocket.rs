@@ -1,3 +1,4 @@
+use crate::browser::*;
 use crate::message::*;
 use crate::state::{GlobalState, Tx};
 use async_std::net::{TcpListener, TcpStream};
@@ -27,6 +28,14 @@ pub async fn run(state: GlobalState, sway_tx: Tx) -> Result<(), io::Error> {
     Ok(())
 }
 
+fn show_notification(message: &str) {
+    Notification::new()
+        .summary("desktopd")
+        .body(message)
+        .show()
+        .expect("Could not show notification");
+}
+
 async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
     let addr = stream
         .peer_addr()
@@ -39,12 +48,6 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
         .expect("Error during the websocket handshake occurred");
 
     info!("New WebSocket connection: {}", addr);
-
-    Notification::new()
-        .summary("desktopd")
-        .body("a new connection was made")
-        .show()
-        .expect("Could not show notification");
 
     let (tx, rx) = unbounded();
     let (write, read) = ws_stream.split();
@@ -72,19 +75,40 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
             info!("received {:#?}", resp);
 
             let inner_peer_map = state.clone();
-            let peers = inner_peer_map.lock().unwrap();
+            let mut peers = inner_peer_map.lock().unwrap();
 
             match resp {
+                DesktopdMessage::Connect(ConnectionType::Browser) => {
+                    show_notification("Browser plugin connected");
+                    peers.mark_browser(&addr);
+                }
                 // a new cli has connected, send the current list of clients
                 DesktopdMessage::Connect(ConnectionType::Cli) => {
+                    peers.mark_cli(&addr);
                     let clients = peers.clients();
                     let init = DesktopdMessage::ClientList { data: clients };
                     let peer: Tx = peers.find_peer(&addr).unwrap().clone();
                     peer.unbounded_send(init).unwrap();
                 }
+
                 DesktopdMessage::CliRequest(CliRequest::FocusWindow { .. }) => {
                     sway_tx.unbounded_send(resp).unwrap();
                 }
+
+                DesktopdMessage::CliRequest(CliRequest::FocusTab { .. }) => {
+                    for peer in peers.get_browsers() {
+                        peer.unbounded_send(resp.clone()).unwrap();
+                    }
+                }
+
+                DesktopdMessage::BrowserMessage {
+                    data: BrowserResponse::Init { data: tabs },
+                } => {
+                    for tab in tabs {
+                        peers.add_tab(tab)
+                    }
+                }
+
                 _ => {}
             }
 
@@ -94,6 +118,6 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
     pin_mut!(receive_handle, answer_channel);
     future::select(answer_channel, receive_handle).await;
 
-    println!("{} disconnected", &addr);
+    info!("{} disconnected", &addr);
     state.lock().unwrap().remove_peer(&addr);
 }

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BrowserTab {
     pub id: usize,
     #[serde(rename = "windowId")]
@@ -9,7 +9,7 @@ pub struct BrowserTab {
     pub url: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BrowserTabRef {
     #[serde(rename = "tabId")]
     pub tab_id: usize,
@@ -17,7 +17,7 @@ pub struct BrowserTabRef {
     pub window_id: usize,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type")]
 pub enum BrowserResponse {
     #[serde(rename = "init")]

@@ -4,7 +4,7 @@ use crate::browser::*;
 use crate::sway::types::*;
 use skim::prelude::*;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "application")]
 pub enum ConnectionType {
     #[serde(rename = "browser")]
@@ -13,14 +13,14 @@ pub enum ConnectionType {
     Cli,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "browser_request")]
 pub enum BrowserRequest {
     #[serde(rename = "focus_tab")]
     FocusTab(BrowserTabRef),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "cli_request")]
 pub enum CliRequest {
     #[serde(rename = "focus_tab")]
@@ -29,7 +29,7 @@ pub enum CliRequest {
     FocusWindow { id: usize },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "client_type")]
 pub enum DesktopdClient {
     #[serde(rename = "win")]
@@ -54,7 +54,7 @@ impl SkimItem for DesktopdClient {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "msg_type")]
 pub enum DesktopdMessage {
     #[serde(rename = "connect")]
