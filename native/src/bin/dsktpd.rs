@@ -7,6 +7,19 @@ use desktopd::browser::*;
 use desktopd::message::*;
 use notify_rust::Notification;
 use skim::prelude::*;
+use tabular::{Row, Table};
+use url::Url;
+
+struct Wrapper {
+    client: DesktopdClient,
+    line: String,
+}
+
+impl SkimItem for Wrapper {
+    fn text(&self) -> Cow<str> {
+        Cow::Borrowed(&self.line)
+    }
+}
 
 type SinkHole = futures::stream::SplitSink<
     async_tungstenite::WebSocketStream<async_std::net::TcpStream>,
@@ -41,9 +54,45 @@ async fn run(tx_item: SkimItemSender) -> SinkHole {
         .expect("Could not parse");
 
     if let DesktopdMessage::ClientList { data } = msg {
-        for item in data {
-            tx_item.send(Arc::new(item)).unwrap()
+        let mut table = Table::new("{:<} {:<} {:<}");
+
+        for item in &data {
+            let row = match item {
+                DesktopdClient::Window { data } => Row::new()
+                    .with_cell("win")
+                    .with_cell(&data.app_id)
+                    .with_cell(&data.name),
+
+                DesktopdClient::Tab { data } => {
+                    let formatted_title = if data.title.len() > 80 {
+                        format!("{}...", &data.title[0..80])
+                    } else {
+                        data.title.clone()
+                    };
+
+                    let mut url = Url::parse(&data.url).unwrap();
+                    url.set_path("");
+                    url.set_query(None);
+                    url.set_fragment(None);
+
+                    Row::new()
+                        .with_cell("tab")
+                        .with_cell(formatted_title)
+                        .with_cell(url.to_string())
+                }
+            };
+            table.add_row(row);
         }
+
+        table
+            .to_string()
+            .split("\n")
+            .zip(data)
+            .map(|(line, client)| Wrapper {
+                client,
+                line: line.to_owned(),
+            })
+            .for_each(|wrap| tx_item.send(Arc::new(wrap)).unwrap())
     }
 
     write
@@ -71,11 +120,11 @@ async fn main() {
         .unwrap_or_else(|| Vec::new());
 
     for item in selected_items.iter() {
-        if let Some(client) = (**item).as_any().downcast_ref::<DesktopdClient>() {
+        if let Some(wrapper) = (**item).as_any().downcast_ref::<Wrapper>() {
             use CliRequest as Req;
             use DesktopdClient as DC;
             use DesktopdMessage as DM;
-            let command = match client {
+            let command = match &wrapper.client {
                 DC::Window { data } => DM::CliRequest(Req::FocusWindow { id: data.id }),
 
                 DC::Tab { data } => DM::CliRequest(Req::FocusTab(BrowserTabRef {

@@ -59,13 +59,3 @@ pub enum DesktopdMessage {
     #[serde(rename = "client_list")]
     ClientList { data: Vec<DesktopdClient> },
 }
-
-impl SkimItem for DesktopdClient {
-    fn text(&self) -> Cow<str> {
-        use DesktopdClient::*;
-        match self {
-            Window { data } => Cow::Owned(format!("{} {} {}", data.app_id, data.name, data.class,)),
-            Tab { data } => Cow::Owned(format!("{} {}", data.title, data.url)),
-        }
-    }
-}

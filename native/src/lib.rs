@@ -6,6 +6,7 @@ extern crate notify_rust;
 extern crate serde;
 extern crate serde_json;
 extern crate skim;
+extern crate tabular;
 extern crate url;
 
 pub mod browser;
