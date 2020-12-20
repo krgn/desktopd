@@ -142,6 +142,13 @@ impl State {
             self.tabs.insert(tab.window_id, tabs);
         }
     }
+
+    pub fn find_tab(&self, tab: &BrowserTabRef) -> Option<&BrowserTab> {
+        self.tabs
+            .get(&tab.window_id)
+            .map(|tabs| tabs.get(&tab.tab_id))
+            .flatten()
+    }
 }
 
 pub type GlobalState = Arc<Mutex<State>>;

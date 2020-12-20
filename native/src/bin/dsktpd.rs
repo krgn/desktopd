@@ -59,21 +59,24 @@ async fn main() {
         .unwrap();
 
     let selected_items = Skim::run_with(&options, Some(rx_item))
-        .map(|out| out.selected_items)
+        .map(|out| match out.final_key {
+            Key::ESC => Vec::new(),
+            _ => out.selected_items,
+        })
         .unwrap_or_else(|| Vec::new());
 
     for item in selected_items.iter() {
         if let Some(client) = (**item).as_any().downcast_ref::<DesktopdClient>() {
+            use CliRequest as Req;
+            use DesktopdClient as DC;
+            use DesktopdMessage as DM;
             let command = match client {
-                DesktopdClient::Window { data } => {
-                    DesktopdMessage::CliRequest(CliRequest::FocusWindow { id: data.id })
-                }
-                DesktopdClient::Tab { data } => {
-                    DesktopdMessage::CliRequest(CliRequest::FocusTab(BrowserTabRef {
-                        tab_id: data.id,
-                        window_id: data.window_id,
-                    }))
-                }
+                DC::Window { data } => DM::CliRequest(Req::FocusWindow { id: data.id }),
+
+                DC::Tab { data } => DM::CliRequest(Req::FocusTab(BrowserTabRef {
+                    tab_id: data.id,
+                    window_id: data.window_id,
+                })),
             };
 
             let msg = Message::Text(serde_json::to_string(&command).unwrap());

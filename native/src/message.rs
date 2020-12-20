@@ -38,22 +38,6 @@ pub enum DesktopdClient {
     Tab { data: BrowserTab },
 }
 
-impl SkimItem for DesktopdClient {
-    fn text(&self) -> Cow<str> {
-        use DesktopdClient::*;
-        match self {
-            Window { data } => Cow::Owned(format!(
-                "{} {} {} {}",
-                data.id, data.app_id, data.name, data.class,
-            )),
-            Tab { data } => Cow::Owned(format!(
-                "{}.{} {} {}",
-                data.id, data.window_id, data.title, data.url
-            )),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "msg_type")]
 pub enum DesktopdMessage {
@@ -74,4 +58,14 @@ pub enum DesktopdMessage {
 
     #[serde(rename = "client_list")]
     ClientList { data: Vec<DesktopdClient> },
+}
+
+impl SkimItem for DesktopdClient {
+    fn text(&self) -> Cow<str> {
+        use DesktopdClient::*;
+        match self {
+            Window { data } => Cow::Owned(format!("{} {} {}", data.app_id, data.name, data.class,)),
+            Tab { data } => Cow::Owned(format!("{} {}", data.title, data.url)),
+        }
+    }
 }

@@ -1,7 +1,7 @@
 use crate::browser::*;
 use crate::message::*;
 use crate::state::GlobalState;
-use crate::state::Rx;
+use crate::state::{Rx, Tx};
 use crate::sway::types::SwayWindow;
 use async_i3ipc::{
     event::{Event, Subscribe, WindowChange, WindowData},
@@ -12,6 +12,7 @@ use futures::prelude::*;
 use futures::{future, pin_mut};
 use log::info;
 use std::io;
+use std::time::Duration;
 
 async fn initialize_state(state: GlobalState, i3: &mut I3) -> io::Result<()> {
     let tree = i3.get_tree().await?;
@@ -24,7 +25,7 @@ async fn initialize_state(state: GlobalState, i3: &mut I3) -> io::Result<()> {
     Ok(())
 }
 
-async fn sway_command_process(state: GlobalState, rx: Rx) {
+async fn sway_command_process(state: GlobalState, tx: Tx, rx: Rx) {
     let mut receiver = rx;
     let mut i3 = I3::connect().await.expect("Failed connecting to sway");
 
@@ -37,18 +38,25 @@ async fn sway_command_process(state: GlobalState, rx: Rx) {
                         .expect("Error running command");
                 }
 
+                // Focus a tab
                 DesktopdMessage::BrowserMessage {
-                    data: BrowserResponse::Activated(_tab),
+                    data: BrowserResponse::Activated(tab_ref),
                 } => {
                     let browser = {
                         let current = state.lock().unwrap();
-                        let focused = *current
-                            .get_focused()
-                            .first()
-                            .expect("Nothing focused, thats... ");
-                        if !focused.is_browser() {
-                            let browsers = current.get_browser_windows();
-                            browsers.first().map(|win| win.id)
+                        if let Some(tab) = current.find_tab(&tab_ref) {
+                            current
+                                .get_browser_windows()
+                                .iter()
+                                .filter(|win| {
+                                    win.name.contains(&tab.title)
+                                        || (tab.url == "about:blank"
+                                            && win.name == "Mozilla Firefox")
+                                })
+                                .map(|win| *win)
+                                .collect::<Vec<&SwayWindow>>()
+                                .first()
+                                .map(|browser| browser.id)
                         } else {
                             None
                         }
@@ -57,6 +65,15 @@ async fn sway_command_process(state: GlobalState, rx: Rx) {
                         i3.run_command(format!("[con_id={}] focus", id))
                             .await
                             .expect("Error running command");
+                    } else {
+                        let back_channel = tx.clone();
+                        let _handle = task::spawn(async move {
+                            let retry = DesktopdMessage::BrowserMessage {
+                                data: BrowserResponse::Activated(tab_ref),
+                            };
+                            task::sleep(Duration::from_millis(1)).await;
+                            back_channel.unbounded_send(retry).expect("Sending failed");
+                        });
                     }
                 }
 
@@ -125,7 +142,7 @@ async fn sway_event_process(state: GlobalState, i3: I3) {
     }
 }
 
-pub async fn run(state: GlobalState, rx: Rx) -> io::Result<()> {
+pub async fn run(state: GlobalState, tx: Tx, rx: Rx) -> io::Result<()> {
     let mut i3 = I3::connect().await?;
 
     initialize_state(state.clone(), &mut i3).await?;
@@ -136,7 +153,7 @@ pub async fn run(state: GlobalState, rx: Rx) -> io::Result<()> {
     });
 
     let commando = task::spawn(async move {
-        sway_command_process(state, rx).await;
+        sway_command_process(state, tx, rx).await;
     });
 
     pin_mut!(listener, commando);

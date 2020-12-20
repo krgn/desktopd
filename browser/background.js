@@ -41,6 +41,7 @@ function handleCommand(cmd) {
 
 const chan = new MessageChannel()
 const init = { msg_type: "connect", application: "browser" }
+var ws
 
 function browserMessage(data) {
   return JSON.stringify({
@@ -50,7 +51,7 @@ function browserMessage(data) {
 }
 
 function connect() {
-  let ws = new WebSocket('ws://localhost:8080')
+  ws = new WebSocket('ws://localhost:8080')
 
   // messages from channel are forwarded to desktopd
   chan.port1.onmessage = (e) => {
@@ -78,13 +79,14 @@ function connect() {
 
   ws.onclose = (e) => {
     console.log('Socket is closed. Reconnect will be attempted in 1 second.', e.reason)
+    ws.close()
     setTimeout(() => {
       connect()
     }, 1000)
   }
 
   ws.onerror = (err) => {
-    console.error('Socket encountered error: ', err.message, 'Closing socket')
+    console.error('Socket encountered error: ', err, 'Closing socket')
     ws.close()
     // attempting to reconnect in a second
     setTimeout(() => {

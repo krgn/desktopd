@@ -26,11 +26,14 @@ async fn main() -> io::Result<()> {
     });
 
     let ws_state = state.clone();
+    let sway_tx_handle = sway_tx.clone();
     task::spawn(async {
         info!("ws server starting");
-        websocket::run(ws_state, sway_tx).await.expect("Yes.");
+        websocket::run(ws_state, sway_tx_handle)
+            .await
+            .expect("Yes.");
         info!("but what now?");
     });
 
-    sway::connection::run(state, sway_rx).await
+    sway::connection::run(state, sway_tx, sway_rx).await
 }
