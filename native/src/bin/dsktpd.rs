@@ -5,6 +5,7 @@ use async_tungstenite::async_std::connect_async;
 use async_tungstenite::tungstenite::protocol::Message;
 use desktopd::browser::*;
 use desktopd::message::*;
+use notify_rust::Notification;
 use skim::prelude::*;
 
 type SinkHole = futures::stream::SplitSink<
@@ -15,7 +16,14 @@ type SinkHole = futures::stream::SplitSink<
 async fn run(tx_item: SkimItemSender) -> SinkHole {
     let (ws_stream, _) = connect_async("ws://127.0.0.1:8080")
         .await
-        .expect("Failed to connect");
+        .unwrap_or_else(|e| {
+            Notification::new()
+                .summary("desktopd")
+                .body("Error: could not connect to daemon.")
+                .show()
+                .expect("Could not show notification");
+            panic!("Fatal error: {}", e)
+        });
 
     let init = DesktopdMessage::Connect(ConnectionType::Cli);
     let msg = Message::Text(serde_json::to_string(&init).unwrap());
@@ -32,14 +40,12 @@ async fn run(tx_item: SkimItemSender) -> SinkHole {
         .expect("Could not parse")
         .expect("Could not parse");
 
-    match msg {
-        DesktopdMessage::ClientList { data } => {
-            for item in data {
-                tx_item.send(Arc::new(item)).unwrap()
-            }
+    if let DesktopdMessage::ClientList { data } = msg {
+        for item in data {
+            tx_item.send(Arc::new(item)).unwrap()
         }
-        _ => {}
     }
+
     write
 }
 
@@ -52,7 +58,6 @@ async fn main() {
     drop(tx_item);
 
     let options = SkimOptionsBuilder::default()
-        .height(Some("50%"))
         .multi(false)
         .preview(None)
         .build()

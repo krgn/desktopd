@@ -62,17 +62,23 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
     let receive_handle = read
         .try_filter(|msg| future::ready(!msg.is_close()))
         .try_for_each(|msg| {
-            let resp: DesktopdMessage = msg
-                .to_text()
-                //.map(serde_json::from_str)
-                .map(|txt| {
-                    info!("json: {}", txt);
-                    serde_json::from_str(txt)
-                })
-                .expect("Could not parse message")
-                .expect("Could not parse message");
+            let txt = msg.to_text();
 
-            info!("received {:#?}", resp);
+            if txt.is_err() {
+                error!("Recieved non-string message from client");
+                return future::ok(());
+            }
+
+            let raw = txt.unwrap();
+            let json = serde_json::from_str::<DesktopdMessage>(raw);
+
+            if json.is_err() {
+                error!("Received invalid json string: {:#?}", raw);
+                error!("Parse error: {:#?}", json.err());
+                return future::ok(());
+            }
+
+            let resp: DesktopdMessage = json.unwrap();
 
             let inner_peer_map = state.clone();
             let mut peers = inner_peer_map.lock().unwrap();

@@ -14,7 +14,6 @@ async fn main() -> io::Result<()> {
     let _ = env_logger::try_init();
 
     let (sway_tx, sway_rx) = unbounded();
-
     let state = GlobalState::new(Mutex::new(State::new()));
 
     let tmux_state = state.clone();
