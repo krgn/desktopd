@@ -14,6 +14,27 @@ function getExtensionInfo() {
   return browser.management.getSelf()
 }
 
+function handleCliRequest(cmd) {
+  switch (cmd.cli_request) {
+    case 'focus_tab': 
+      browser.tabs.update(cmd.tabId, { 
+        active: true
+      }).then((e) => 
+        console.log("activated tab", cmd.tabId, e)
+      )
+  }
+}
+
+function handleCommand(cmd) {
+  switch(cmd.msg_type) {
+    case 'cli_request':
+      handleCliRequest(cmd)
+      break
+    default:
+      console.log('unhandled command', cmd)
+  }
+}
+
 // ░█▀▀░█▀█░█▀▀░█░█░█▀▀░▀█▀
 // ░▀▀█░█░█░█░░░█▀▄░█▀▀░░█░
 // ░▀▀▀░▀▀▀░▀▀▀░▀░▀░▀▀▀░░▀░
@@ -52,7 +73,7 @@ function connect() {
 
   ws.onmessage = (e) => {
     let cmd = JSON.parse(e.data)
-    console.log("Received cmd", cmd)
+    handleCommand(cmd)
   }
 
   ws.onclose = (e) => {

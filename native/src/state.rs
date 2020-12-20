@@ -56,10 +56,10 @@ impl State {
         }
     }
 
-    pub fn get_browsers(&self) -> Vec<Tx> {
-        self.peers.iter().fold(vec![], |mut out, (_, (t, tx))| {
+    pub fn get_browsers(&self) -> Vec<(SocketAddr, Tx)> {
+        self.peers.iter().fold(vec![], |mut out, (addr, (t, tx))| {
             if let Some(ConnectionType::Browser) = t {
-                out.push(tx.clone());
+                out.push((*addr, tx.clone()));
             }
             out
         })
@@ -101,6 +101,13 @@ impl State {
             let window_id = tab.window_id;
             map.insert(tab.id, tab);
             self.tabs.insert(window_id, map);
+        }
+    }
+
+    pub fn remove_tab(&mut self, tab: BrowserTabRef) {
+        if let Some(mut tabs) = self.tabs.remove(&tab.window_id) {
+            tabs.remove(&tab.tab_id);
+            self.tabs.insert(tab.window_id, tabs);
         }
     }
 }

@@ -6,7 +6,7 @@ use async_std::task;
 use async_tungstenite::tungstenite::protocol::Message;
 use futures::prelude::*;
 use futures::{channel::mpsc::unbounded, future, pin_mut};
-use log::info;
+use log::{error, info};
 use notify_rust::Notification;
 use std::env;
 use std::io;
@@ -66,7 +66,7 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
                 .to_text()
                 //.map(serde_json::from_str)
                 .map(|txt| {
-                    println!("json: {}", txt);
+                    info!("json: {}", txt);
                     serde_json::from_str(txt)
                 })
                 .expect("Could not parse message")
@@ -96,8 +96,14 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
                 }
 
                 DesktopdMessage::CliRequest(CliRequest::FocusTab { .. }) => {
-                    for peer in peers.get_browsers() {
-                        peer.unbounded_send(resp.clone()).unwrap();
+                    for (peer_addr, peer) in peers.get_browsers() {
+                        match peer.unbounded_send(resp.clone()) {
+                            Ok(_) => info!("Successfully sent focus-tab message to browsers"),
+                            Err(e) => {
+                                peers.remove_peer(&peer_addr);
+                                error!("Could not send message to browser {}: {}", peer_addr, e)
+                            }
+                        }
                     }
                 }
 
@@ -108,6 +114,14 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
                         peers.add_tab(tab)
                     }
                 }
+
+                DesktopdMessage::BrowserMessage {
+                    data: BrowserResponse::Updated { data: tab },
+                } => peers.add_tab(tab),
+
+                DesktopdMessage::BrowserMessage {
+                    data: BrowserResponse::Removed(tab),
+                } => peers.remove_tab(tab),
 
                 _ => {}
             }
