@@ -56,13 +56,45 @@ impl State {
         }
     }
 
-    pub fn get_browsers(&self) -> Vec<(SocketAddr, Tx)> {
+    pub fn get_browser_windows(&self) -> Vec<&SwayWindow> {
+        self.windows
+            .iter()
+            .filter(|(_, win)| win.is_browser())
+            .map(|(_, win)| win)
+            .collect::<Vec<&SwayWindow>>()
+    }
+
+    pub fn get_browser_connections(&self) -> Vec<(SocketAddr, Tx)> {
         self.peers.iter().fold(vec![], |mut out, (addr, (t, tx))| {
             if let Some(ConnectionType::Browser) = t {
                 out.push((*addr, tx.clone()));
             }
             out
         })
+    }
+
+    pub fn get_focused(&self) -> Vec<&SwayWindow> {
+        self.windows
+            .iter()
+            .filter(|(_, win)| win.focused)
+            .map(|(_, win)| win)
+            .collect::<Vec<&SwayWindow>>()
+    }
+
+    pub fn remove_focused(&mut self) -> Vec<SwayWindow> {
+        let mut out = vec![];
+        let ids = self
+            .get_focused()
+            .iter()
+            .map(|win| win.id)
+            .collect::<Vec<usize>>();
+
+        for id in ids {
+            if let Some(focused) = self.windows.remove(&id) {
+                out.push(focused)
+            }
+        }
+        out
     }
 
     pub fn add_window(&mut self, win: SwayWindow) {

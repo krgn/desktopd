@@ -1,3 +1,4 @@
+use crate::browser::*;
 use crate::message::*;
 use crate::state::GlobalState;
 use crate::state::Rx;
@@ -23,7 +24,7 @@ async fn initialize_state(state: GlobalState, i3: &mut I3) -> io::Result<()> {
     Ok(())
 }
 
-async fn sway_command_process(rx: Rx) {
+async fn sway_command_process(state: GlobalState, rx: Rx) {
     let mut receiver = rx;
     let mut i3 = I3::connect().await.expect("Failed connecting to sway");
 
@@ -35,6 +36,30 @@ async fn sway_command_process(rx: Rx) {
                         .await
                         .expect("Error running command");
                 }
+
+                DesktopdMessage::BrowserMessage {
+                    data: BrowserResponse::Activated(_tab),
+                } => {
+                    let browser = {
+                        let current = state.lock().unwrap();
+                        let focused = *current
+                            .get_focused()
+                            .first()
+                            .expect("Nothing focused, thats... ");
+                        if !focused.is_browser() {
+                            let browsers = current.get_browser_windows();
+                            browsers.first().map(|win| win.id)
+                        } else {
+                            None
+                        }
+                    };
+                    if let Some(id) = browser {
+                        i3.run_command(format!("[con_id={}] focus", id))
+                            .await
+                            .expect("Error running command");
+                    }
+                }
+
                 _ => (),
             };
         } else {
@@ -51,6 +76,21 @@ fn handle_window_event(state: GlobalState, data: WindowData) {
             info!("removing window: {:#?}", data.container.id);
             state.lock().unwrap().remove_window(&data.container.id)
         }
+
+        WindowChange::Focus => {
+            let mut current = state.lock().unwrap();
+            let focused = current.remove_focused();
+            for win in focused {
+                current.add_window(SwayWindow {
+                    focused: false,
+                    ..win
+                })
+            }
+            for win in windows {
+                current.add_window(win)
+            }
+        }
+
         _ => {
             for win in windows {
                 state.lock().unwrap().add_window(win)
@@ -90,12 +130,13 @@ pub async fn run(state: GlobalState, rx: Rx) -> io::Result<()> {
 
     initialize_state(state.clone(), &mut i3).await?;
 
+    let listener_state = state.clone();
     let listener = task::spawn(async move {
-        sway_event_process(state, i3).await;
+        sway_event_process(listener_state, i3).await;
     });
 
     let commando = task::spawn(async move {
-        sway_command_process(rx).await;
+        sway_command_process(state, rx).await;
     });
 
     pin_mut!(listener, commando);

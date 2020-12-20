@@ -9,6 +9,7 @@ use async_i3ipc::{
 pub struct SwayWindow {
     pub id: usize,
     pub app_id: String,
+    pub focused: bool,
     pub name: String,
     pub output: String,
     pub workspace: String,
@@ -16,6 +17,11 @@ pub struct SwayWindow {
 }
 
 impl SwayWindow {
+    pub fn is_browser(&self) -> bool {
+        let normalized = self.app_id.to_lowercase();
+        normalized.contains("firefox") || normalized.contains("chrome")
+    }
+
     pub fn collect_windows(node: &Node) -> Vec<SwayWindow> {
         let mut this = if node.node_type == NodeType::Con && node.name.is_some() {
             let empty = String::from("");
@@ -29,6 +35,7 @@ impl SwayWindow {
 
             let win = SwayWindow {
                 id: node.id,
+                focused: node.focused,
                 app_id: app_id.to_owned(),
                 output: empty.to_owned(),
                 workspace: empty.to_owned(),

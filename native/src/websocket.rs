@@ -96,7 +96,7 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
                 }
 
                 DesktopdMessage::CliRequest(CliRequest::FocusTab { .. }) => {
-                    for (peer_addr, peer) in peers.get_browsers() {
+                    for (peer_addr, peer) in peers.get_browser_connections() {
                         match peer.unbounded_send(resp.clone()) {
                             Ok(_) => info!("Successfully sent focus-tab message to browsers"),
                             Err(e) => {
@@ -122,6 +122,12 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
                 DesktopdMessage::BrowserMessage {
                     data: BrowserResponse::Removed(tab),
                 } => peers.remove_tab(tab),
+
+                DesktopdMessage::BrowserMessage {
+                    data: BrowserResponse::Activated(_),
+                } => {
+                    sway_tx.unbounded_send(resp).unwrap();
+                }
 
                 _ => {}
             }
