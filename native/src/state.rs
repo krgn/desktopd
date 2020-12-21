@@ -49,6 +49,7 @@ impl State {
         }
 
         if let Some((_, tx)) = self.peers.remove(addr) {
+            info!("marking {} as browser with id {}", addr, id);
             self.peers
                 .insert(*addr, (Some(ConnectionType::Browser { id }), tx));
         }

@@ -1,7 +1,7 @@
 use crate::browser::*;
 use crate::message::*;
 use crate::state::{GlobalState, Tx};
-use async_std::net::{TcpListener, TcpStream};
+use async_std::net::{SocketAddr, TcpListener, TcpStream};
 use async_std::task;
 use async_tungstenite::tungstenite::protocol::Message;
 use futures::prelude::*;
@@ -10,6 +10,10 @@ use log::{error, info};
 use notify_rust::Notification;
 use std::env;
 use std::io;
+
+// ░█▀█░█░█░█▀▄░█░░░▀█▀░█▀▀
+// ░█▀▀░█░█░█▀▄░█░░░░█░░█░░
+// ░▀░░░▀▀▀░▀▀░░▀▀▀░▀▀▀░▀▀▀
 
 pub async fn run(state: GlobalState, sway_tx: Tx) -> Result<(), io::Error> {
     let addr = env::args()
@@ -28,13 +32,9 @@ pub async fn run(state: GlobalState, sway_tx: Tx) -> Result<(), io::Error> {
     Ok(())
 }
 
-fn show_notification(message: &str) {
-    Notification::new()
-        .summary("desktopd")
-        .body(message)
-        .show()
-        .expect("Could not show notification");
-}
+// ░█▀█░█▀▄░▀█▀░█░█░█▀█░▀█▀░█▀▀
+// ░█▀▀░█▀▄░░█░░▀▄▀░█▀█░░█░░█▀▀
+// ░▀░░░▀░▀░▀▀▀░░▀░░▀░▀░░▀░░▀▀▀
 
 async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
     let addr = stream
@@ -52,7 +52,9 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
     let (tx, rx) = unbounded();
     let (write, read) = ws_stream.split();
 
-    state.lock().unwrap().add_peer(addr, tx);
+    {
+        state.lock().unwrap().add_peer(addr, tx);
+    }
 
     let answer_channel = rx
         .map(|msg| serde_json::to_string(&msg).unwrap())
@@ -62,86 +64,9 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
     let receive_handle = read
         .try_filter(|msg| future::ready(!msg.is_close()))
         .try_for_each(|msg| {
-            let txt = msg.to_text();
-
-            if txt.is_err() {
-                error!("Recieved non-string message from client");
-                return future::ok(());
-            }
-
-            let raw = txt.unwrap();
-            let json = serde_json::from_str::<DesktopdMessage>(raw);
-
-            if json.is_err() {
-                error!("Received invalid json string: {:#?}", raw);
-                error!("Parse error: {:#?}", json.err());
-                return future::ok(());
-            }
-
-            let resp: DesktopdMessage = json.unwrap();
-
-            let inner_peer_map = state.clone();
-            let mut peers = inner_peer_map.lock().unwrap();
-
-            match resp {
-                DesktopdMessage::Connect(ConnectionType::Browser { id }) => {
-                    show_notification("Browser plugin connected");
-                    peers.mark_browser(id, &addr);
-                }
-                // a new cli has connected, send the current list of clients
-                DesktopdMessage::Connect(ConnectionType::Cli) => {
-                    peers.mark_cli(&addr);
-                    let clients = peers.clients();
-                    let init = DesktopdMessage::ClientList { data: clients };
-                    let peer: Tx = peers.find_peer(&addr).unwrap().clone();
-                    peer.unbounded_send(init).unwrap();
-                }
-
-                DesktopdMessage::CliRequest(CliRequest::FocusWindow { .. }) => {
-                    sway_tx.unbounded_send(resp).unwrap();
-                }
-
-                DesktopdMessage::CliRequest(CliRequest::FocusTab { .. }) => {
-                    for (peer_addr, peer) in peers.get_browser_connections() {
-                        match peer.unbounded_send(resp.clone()) {
-                            Ok(_) => info!("Successfully sent focus-tab message to browsers"),
-                            Err(e) => {
-                                if let Some((conn, _)) = peers.remove_peer(&peer_addr) {
-                                    if conn.map(|t| t.is_browser()).unwrap_or(false) {
-                                        show_notification("Browser Plugin disconnected")
-                                    }
-                                }
-                                error!("Could not send message to browser {}: {}", peer_addr, e)
-                            }
-                        }
-                    }
-                }
-
-                DesktopdMessage::BrowserMessage {
-                    data: BrowserResponse::Init { data: tabs },
-                } => {
-                    for tab in tabs {
-                        peers.add_tab(tab)
-                    }
-                }
-
-                DesktopdMessage::BrowserMessage {
-                    data: BrowserResponse::Updated { data: tab },
-                } => peers.add_tab(tab),
-
-                DesktopdMessage::BrowserMessage {
-                    data: BrowserResponse::Removed(tab),
-                } => peers.remove_tab(tab),
-
-                DesktopdMessage::BrowserMessage {
-                    data: BrowserResponse::Activated(_),
-                } => {
-                    sway_tx.unbounded_send(resp).unwrap();
-                }
-
-                _ => {}
-            }
-
+            let sway_handle = sway_tx.clone();
+            let receive_state = state.clone();
+            handle_message(receive_state, &addr, sway_handle, msg);
             future::ok(())
         });
 
@@ -152,6 +77,133 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
     if let Some((conn, _)) = state.lock().unwrap().remove_peer(&addr) {
         if conn.map(|t| t.is_browser()).unwrap_or(false) {
             show_notification("Browser Plugin disconnected")
+        }
+    }
+}
+
+fn show_notification(message: &str) {
+    Notification::new()
+        .summary("desktopd")
+        .body(message)
+        .show()
+        .expect("Could not show notification");
+}
+
+fn handle_message(state: GlobalState, addr: &SocketAddr, sway_tx: Tx, msg: Message) {
+    let txt = msg.to_text();
+
+    if txt.is_err() {
+        error!("Recieved non-string message from client");
+        return;
+    }
+
+    let raw = txt.unwrap();
+    let json = serde_json::from_str::<DesktopdMessage>(raw);
+
+    if json.is_err() {
+        error!("Received invalid json string: {:#?}", raw);
+        error!("Parse error: {:#?}", json.err());
+        return;
+    }
+
+    let msg: DesktopdMessage = json.unwrap();
+    let inner_state = state.clone();
+    let sway_handle = sway_tx.clone();
+    handle_desktopd_message(inner_state, &addr, sway_handle, msg);
+}
+
+fn handle_desktopd_message(
+    state: GlobalState,
+    addr: &SocketAddr,
+    sway_tx: Tx,
+    msg: DesktopdMessage,
+) {
+    use DesktopdMessage::*;
+    match msg {
+        Connect(conn_type) => handle_connect(state, addr, conn_type),
+        CliRequest(data) => handle_cli_request(state, sway_tx, data),
+        BrowserMessage { data } => handle_browser_response(state, sway_tx, data),
+
+        _ => {}
+    }
+}
+
+fn handle_connect(state: GlobalState, addr: &SocketAddr, msg: ConnectionType) {
+    let mut state = state.lock().unwrap();
+    match msg {
+        ConnectionType::Browser { id } => {
+            show_notification("Browser plugin connected");
+            state.mark_browser(id, &addr);
+        }
+
+        // a new cli has connected, send the current list of clients
+        ConnectionType::Cli => {
+            state.mark_cli(&addr);
+            let clients = state.clients();
+            let init = DesktopdMessage::ClientList { data: clients };
+            let peer: Tx = state.find_peer(&addr).unwrap().clone();
+            peer.unbounded_send(init)
+                .expect("Could not respond with client list");
+        }
+    }
+}
+
+fn handle_browser_response(state: GlobalState, sway_tx: Tx, data: BrowserResponse) {
+    let mut state = state.lock().unwrap();
+    use BrowserResponse::*;
+    match data {
+        Init { data: tabs } => {
+            info!("Received initial tab list from browser");
+            for tab in tabs {
+                state.add_tab(tab)
+            }
+        }
+
+        Updated { data: tab } => {
+            info!("Updated tab {}", tab.id);
+            state.add_tab(tab)
+        }
+
+        Removed(tab) => {
+            info!("Removed tab {}", tab.tab_id);
+            state.remove_tab(tab)
+        }
+
+        Activated(_) => {
+            sway_tx
+                .unbounded_send(DesktopdMessage::BrowserMessage { data })
+                .unwrap();
+        }
+
+        _ => (),
+    }
+}
+
+fn handle_cli_request(state: GlobalState, sway_tx: Tx, data: CliRequest) {
+    let mut state = state.lock().unwrap();
+
+    use CliRequest::*;
+    match &data {
+        FocusWindow { .. } => {
+            sway_tx
+                .unbounded_send(DesktopdMessage::CliRequest(data))
+                .unwrap();
+        }
+
+        FocusTab { .. } => {
+            for (peer_addr, peer) in state.get_browser_connections() {
+                match peer.unbounded_send(DesktopdMessage::CliRequest(data.clone())) {
+                    Ok(_) => info!("Successfully sent focus-tab message to browsers"),
+                    Err(e) => {
+                        if let Some((conn, _)) = state.remove_peer(&peer_addr) {
+                            if conn.map(|t| t.is_browser()).unwrap_or(false) {
+                                show_notification("Browser Plugin disconnected")
+                            }
+                        }
+                        error!("Could not send message to browser {}: {}", peer_addr, e)
+                    }
+                }
+            }
         }
     }
 }
