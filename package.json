@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "run-ext": "./node_modules/.bin/web-ext run",
-    "build-ext": "./node_modules/.bin/web-ext build",
-    "sign-ext": "./node_modules/.bin/web-ext sign",
+    "run-ext": "./node_modules/.bin/web-ext run --artifacts-dir web-ext-artifacts/ --source-dir=browser/ ",
+    "build-ext": "./node_modules/.bin/web-ext build --artifacts-dir web-ext-artifacts/ --source-dir=browser/ ",
+    "sign-ext": "./node_modules/.bin/web-ext sign --artifacts-dir web-ext-artifacts/ --source-dir=browser/ ",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
