@@ -66,7 +66,7 @@ async fn run(tx_item: SkimItemSender) -> SinkHole {
                     };
 
                     Row::new()
-                        .with_cell("win")
+                        .with_cell("app")
                         .with_cell(&id_or_class)
                         .with_cell(&data.name)
                 }
