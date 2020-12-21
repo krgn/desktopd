@@ -84,9 +84,9 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
             let mut peers = inner_peer_map.lock().unwrap();
 
             match resp {
-                DesktopdMessage::Connect(ConnectionType::Browser) => {
+                DesktopdMessage::Connect(ConnectionType::Browser { id }) => {
                     show_notification("Browser plugin connected");
-                    peers.mark_browser(&addr);
+                    peers.mark_browser(id, &addr);
                 }
                 // a new cli has connected, send the current list of clients
                 DesktopdMessage::Connect(ConnectionType::Cli) => {
@@ -106,7 +106,11 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
                         match peer.unbounded_send(resp.clone()) {
                             Ok(_) => info!("Successfully sent focus-tab message to browsers"),
                             Err(e) => {
-                                peers.remove_peer(&peer_addr);
+                                if let Some((conn, _)) = peers.remove_peer(&peer_addr) {
+                                    if conn.map(|t| t.is_browser()).unwrap_or(false) {
+                                        show_notification("Browser Plugin disconnected")
+                                    }
+                                }
                                 error!("Could not send message to browser {}: {}", peer_addr, e)
                             }
                         }
@@ -145,5 +149,9 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
     future::select(answer_channel, receive_handle).await;
 
     info!("{} disconnected", &addr);
-    state.lock().unwrap().remove_peer(&addr);
+    if let Some((conn, _)) = state.lock().unwrap().remove_peer(&addr) {
+        if conn.map(|t| t.is_browser()).unwrap_or(false) {
+            show_notification("Browser Plugin disconnected")
+        }
+    }
 }

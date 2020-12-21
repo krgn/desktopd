@@ -1,11 +1,11 @@
-use async_std::net::SocketAddr;
-use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-
 use crate::browser::*;
 use crate::message::*;
 use crate::sway::types::*;
+use async_std::net::SocketAddr;
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use log::info;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 pub type Tx = UnboundedSender<DesktopdMessage>;
 pub type Rx = UnboundedReceiver<DesktopdMessage>;
@@ -31,10 +31,26 @@ impl State {
         self.peers.insert(addr, (None, tx));
     }
 
-    pub fn mark_browser(&mut self, addr: &SocketAddr) {
+    pub fn get_stale_peers(&self, id: &str) -> Vec<SocketAddr> {
+        self.peers
+            .iter()
+            .filter(|(_, (conn, _))| conn.as_ref().map(|it| it.has_id(&id)).unwrap_or(false))
+            .map(|(addr, _)| addr.clone())
+            .collect::<Vec<SocketAddr>>()
+    }
+
+    pub fn mark_browser(&mut self, id: String, addr: &SocketAddr) {
+        let stale = self.get_stale_peers(&id);
+
+        for conn in stale {
+            if let Some(_) = self.peers.remove(&conn) {
+                info!("removing stale browser connection");
+            }
+        }
+
         if let Some((_, tx)) = self.peers.remove(addr) {
             self.peers
-                .insert(*addr, (Some(ConnectionType::Browser), tx));
+                .insert(*addr, (Some(ConnectionType::Browser { id }), tx));
         }
     }
 
@@ -44,8 +60,8 @@ impl State {
         }
     }
 
-    pub fn remove_peer(&mut self, addr: &SocketAddr) {
-        self.peers.remove(addr);
+    pub fn remove_peer(&mut self, addr: &SocketAddr) -> Option<(Option<ConnectionType>, Tx)> {
+        self.peers.remove(addr)
     }
 
     pub fn find_peer(&self, addr: &SocketAddr) -> Option<Tx> {
@@ -66,7 +82,7 @@ impl State {
 
     pub fn get_browser_connections(&self) -> Vec<(SocketAddr, Tx)> {
         self.peers.iter().fold(vec![], |mut out, (addr, (t, tx))| {
-            if let Some(ConnectionType::Browser) = t {
+            if let Some(ConnectionType::Browser { .. }) = t {
                 out.push((*addr, tx.clone()));
             }
             out

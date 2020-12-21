@@ -1,2 +1,4 @@
 /native/target
 /native/Cargo.lock
+/node_modules/
+/web-ext-artifacts/

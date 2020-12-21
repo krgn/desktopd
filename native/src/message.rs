@@ -2,13 +2,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::browser::*;
 use crate::sway::types::*;
-use skim::prelude::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "application")]
 pub enum ConnectionType {
     #[serde(rename = "browser")]
-    Browser,
+    Browser { id: String },
     #[serde(rename = "cli")]
     Cli,
 }
@@ -58,4 +57,20 @@ pub enum DesktopdMessage {
 
     #[serde(rename = "client_list")]
     ClientList { data: Vec<DesktopdClient> },
+}
+
+impl ConnectionType {
+    pub fn has_id(&self, other: &str) -> bool {
+        match self {
+            ConnectionType::Browser { ref id } => other == id,
+            _ => false,
+        }
+    }
+
+    pub fn is_browser(&self) -> bool {
+        match self {
+            ConnectionType::Browser { .. } => true,
+            _ => false,
+        }
+    }
 }
