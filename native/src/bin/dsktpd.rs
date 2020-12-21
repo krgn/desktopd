@@ -58,10 +58,18 @@ async fn run(tx_item: SkimItemSender) -> SinkHole {
 
         for item in &data {
             let row = match item {
-                DesktopdClient::Window { data } => Row::new()
-                    .with_cell("win")
-                    .with_cell(&data.app_id)
-                    .with_cell(&data.name),
+                DesktopdClient::Window { data } => {
+                    let id_or_class = if data.app_id.len() == 0 {
+                        data.class.to_owned()
+                    } else {
+                        data.app_id.to_owned()
+                    };
+
+                    Row::new()
+                        .with_cell("win")
+                        .with_cell(&id_or_class)
+                        .with_cell(&data.name)
+                }
 
                 DesktopdClient::Tab { data } => {
                     let formatted_title = if data.title.len() > 80 {
