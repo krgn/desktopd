@@ -123,7 +123,6 @@ fn handle_desktopd_message(
         Connect(conn_type) => handle_connect(state, addr, conn_type),
         CliRequest(data) => handle_cli_request(state, sway_tx, data),
         BrowserMessage { data } => handle_browser_response(state, sway_tx, data),
-
         _ => {}
     }
 }

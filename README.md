@@ -2,8 +2,8 @@
 
 ## TODO
 
-* moving tabs should be tracked properly
 * nixpkgs + systemd files
-* autotile inclusion
+* moving tabs should be tracked properly
+* custom alacritty launcher
 * assign 
 * config file

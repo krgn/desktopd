@@ -62,6 +62,13 @@ const Desktopd = {
 
     function connect() {
       console.log("connecting to", url)
+
+      if (ws != null && ws != undefined) {
+        console.log("cleaning up previous connection")
+        ws.close()
+        delete ws
+      }
+
       ws = new WebSocket(url)
 
       // list all tabs and send them to desktopd
@@ -206,6 +213,7 @@ const Desktopd = {
 
     console.log("browser id is: ", getId())
     console.log("connecting to daemon")
+
     connect()
   }
 }
