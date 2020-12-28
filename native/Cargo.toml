@@ -6,7 +6,8 @@ description = "Browse sway/i3 windows and browser tabs."
 license = "Apache-2.0"
 homepage = "https://github.com/krgn/desktopd"
 repository = "https://github.com/krgn/desktopd"
-license-file = "LICENSE"
+license-file = "../LICENSE"
+readme = "../README.md"
 keywords = ["firefox", "sway"]
 edition = "2018"
 
