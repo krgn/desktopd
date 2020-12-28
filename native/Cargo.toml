@@ -3,7 +3,6 @@ name = "desktopd"
 version = "1.0.0"
 authors = ["Karsten Gebbert <k@ioctl.it>"]
 description = "Browse sway/i3 windows and browser tabs."
-license = "Apache-2.0"
 homepage = "https://github.com/krgn/desktopd"
 repository = "https://github.com/krgn/desktopd"
 license-file = "../LICENSE"
@@ -20,7 +19,7 @@ env_logger = "0.8"
 log = "0.4"
 async-std = { version = "1.6", features = ["attributes"] }
 async-i3ipc = { version = "0.2", features = ["sway"] }
-async-tungstenite = { version = "0.11", features = ["async-std-runtime"]}
+async-tungstenite = { version = "0.10", features = ["async-std-runtime"]}
 notify-rust = "4.0.0"
 skim = "0.9.3"
 async-process = "1.0.1"
