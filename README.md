@@ -2,6 +2,8 @@
 
 `desktopd` integrates [sway](https://github.com/swaywm/sway) and Firefox via an extension to provide the ability to navigate transparently between browser tabs and regular windows. 
 
+Quite experimental still.
+
 ## TODO
 
 * nixpkgs + systemd files
