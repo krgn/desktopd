@@ -2,6 +2,12 @@
 name = "desktopd"
 version = "1.0.0"
 authors = ["Karsten Gebbert <k@ioctl.it>"]
+description = "Browse sway/i3 windows and browser tabs."
+license = "Apache-2.0"
+homepage = "https://github.com/krgn/desktopd"
+repository = "https://github.com/krgn/desktopd"
+license-file = "LICENSE"
+keywords = ["firefox", "sway"]
 edition = "2018"
 
 [dependencies]

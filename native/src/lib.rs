@@ -1,4 +1,3 @@
-extern crate async_i3ipc;
 extern crate async_process;
 extern crate env_logger;
 extern crate log;
