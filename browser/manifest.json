@@ -4,11 +4,11 @@
       "background.js"
     ]
   },
-  "description": "integrates browser with desktopd",
+  "description": "Integrates browser with desktopd",
   "manifest_version": 2,
   "name": "desktopd",
   "permissions": [
     "tabs"
   ],
-  "version": "1.0"
+  "version": "1.0.0"
 }
