@@ -4,7 +4,7 @@ use crate::sway::types::*;
 use async_std::net::SocketAddr;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use log::info;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub type Tx = UnboundedSender<DesktopdMessage>;
@@ -123,10 +123,21 @@ impl State {
     }
 
     pub fn clients(&self) -> Vec<DesktopdClient> {
+        let window_titles = self
+            .windows
+            .iter()
+            .map(|(_, win)| &win.name[..])
+            .collect::<HashSet<&str>>();
+
         let tabs = self
             .tabs
             .iter()
             .flat_map(|(_, inner)| inner.iter().map(|(_, tabs)| tabs))
+            .filter(|tab| {
+                window_titles
+                    .iter()
+                    .fold(true, |result, name| result && !name.contains(&tab.title))
+            })
             .map(|tab| DesktopdClient::Tab { data: tab.clone() })
             .collect::<Vec<DesktopdClient>>();
 
