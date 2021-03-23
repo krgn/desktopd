@@ -242,7 +242,7 @@ async fn handle_window_event(i3: &mut I3, state: GlobalState, data: WindowData) 
 
         WindowChange::Focus => {
             mark_focused(state.clone(), &data);
-            maybe_split_container(i3, &data).await;
+            // maybe_split_container(i3, &data).await;
         }
 
         _ => {
