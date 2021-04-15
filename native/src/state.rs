@@ -3,7 +3,6 @@ use crate::message::*;
 use crate::sway::types::*;
 use async_std::net::SocketAddr;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use log::info;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -13,7 +12,7 @@ pub type TabId = usize;
 pub type WindowId = usize;
 
 pub struct State {
-    peers: HashMap<SocketAddr, (Option<ConnectionType>, Tx)>,
+    peers: HashMap<SocketAddr, (ConnectionType, Tx)>,
     tabs: HashMap<WindowId, HashMap<TabId, BrowserTab>>,
     windows: HashMap<WindowId, SwayWindow>,
 }
@@ -27,41 +26,19 @@ impl State {
         }
     }
 
-    pub fn add_peer(&mut self, addr: SocketAddr, tx: Tx) {
-        self.peers.insert(addr, (None, tx));
-    }
-
-    pub fn get_stale_peers(&self, id: &str) -> Vec<SocketAddr> {
-        self.peers
-            .iter()
-            .filter(|(_, (conn, _))| conn.as_ref().map(|it| it.has_id(&id)).unwrap_or(false))
-            .map(|(addr, _)| addr.clone())
-            .collect::<Vec<SocketAddr>>()
-    }
-
-    pub fn mark_browser(&mut self, id: String, addr: &SocketAddr) {
-        let stale = self.get_stale_peers(&id);
-
-        for conn in stale {
-            if let Some(_) = self.peers.remove(&conn) {
-                info!("removing stale browser connection");
+    pub fn add_peer(&mut self, tipe: ConnectionType, addr: SocketAddr, tx: Tx) {
+        match tipe {
+            ConnectionType::Browser { .. } => {
+                self.peers.retain(|_, (inner_t, _)| &tipe != inner_t);
+                self.peers.insert(addr, (tipe, tx));
+            }
+            ConnectionType::Cli => {
+                self.peers.insert(addr, (tipe, tx));
             }
         }
-
-        if let Some((_, tx)) = self.peers.remove(addr) {
-            info!("marking {} as browser with id {}", addr, id);
-            self.peers
-                .insert(*addr, (Some(ConnectionType::Browser { id }), tx));
-        }
     }
 
-    pub fn mark_cli(&mut self, addr: &SocketAddr) {
-        if let Some((_, tx)) = self.peers.remove(addr) {
-            self.peers.insert(*addr, (Some(ConnectionType::Cli), tx));
-        }
-    }
-
-    pub fn remove_peer(&mut self, addr: &SocketAddr) -> Option<(Option<ConnectionType>, Tx)> {
+    pub fn remove_peer(&mut self, addr: &SocketAddr) -> Option<(ConnectionType, Tx)> {
         self.peers.remove(addr)
     }
 
@@ -83,7 +60,7 @@ impl State {
 
     pub fn get_browser_connections(&self) -> Vec<(SocketAddr, Tx)> {
         self.peers.iter().fold(vec![], |mut out, (addr, (t, tx))| {
-            if let Some(ConnectionType::Browser { .. }) = t {
+            if let ConnectionType::Browser { .. } = t {
                 out.push((*addr, tx.clone()));
             }
             out

@@ -1,3 +1,4 @@
+extern crate anyhow;
 extern crate async_process;
 extern crate env_logger;
 extern crate log;
@@ -6,9 +7,11 @@ extern crate serde;
 extern crate serde_json;
 extern crate skim;
 extern crate tabular;
+extern crate thiserror;
 extern crate url;
 
 pub mod browser;
+pub mod error;
 pub mod message;
 pub mod state;
 pub mod sway;

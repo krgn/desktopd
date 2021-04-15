@@ -2,7 +2,6 @@
 use async_std::task;
 use desktopd::state::*;
 use desktopd::sway;
-use desktopd::tmux;
 use desktopd::websocket;
 use futures::channel::mpsc::unbounded;
 use log::info;
@@ -16,22 +15,13 @@ async fn main() -> io::Result<()> {
     let (sway_tx, sway_rx) = unbounded();
     let state = GlobalState::new(Mutex::new(State::new()));
 
-    let tmux_state = state.clone();
-    task::spawn(async {
-        info!("tmux events starting");
-        tmux::connection::run(tmux_state)
-            .await
-            .expect("Coult not start tmux)");
-    });
-
     let ws_state = state.clone();
     let sway_tx_handle = sway_tx.clone();
     task::spawn(async {
         info!("ws server starting");
         websocket::run(ws_state, sway_tx_handle)
             .await
-            .expect("Yes.");
-        info!("but what now?");
+            .expect("Websocket server failed");
     });
 
     sway::connection::run(state, sway_tx, sway_rx).await

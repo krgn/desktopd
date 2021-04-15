@@ -12,6 +12,19 @@ pub enum ConnectionType {
     Cli,
 }
 
+impl PartialEq for ConnectionType {
+    fn eq(&self, other: &Self) -> bool {
+        use ConnectionType::*;
+        match self {
+            Browser { id: me } => match other {
+                Browser { id: you } => me == you,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "browser_request")]
 pub enum BrowserRequest {
