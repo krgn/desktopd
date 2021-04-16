@@ -16,5 +16,8 @@ pub enum DesktopdError {
     IoError(#[from] std::io::Error),
 
     #[error(transparent)]
+    TimeoutError(#[from] async_std::future::TimeoutError),
+
+    #[error(transparent)]
     ChannelError(#[from] futures::channel::mpsc::TrySendError<DesktopdMessage>),
 }
