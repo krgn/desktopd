@@ -1,7 +1,11 @@
+use crate::message::DesktopdMessage;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum DesktopdError {
+    #[error("Could not initialize connection.")]
+    ConnectInitError,
+
     #[error(transparent)]
     WebSocketError(#[from] async_tungstenite::tungstenite::Error),
 
@@ -9,5 +13,8 @@ pub enum DesktopdError {
     SerializationError(#[from] serde_json::Error),
 
     #[error(transparent)]
-    IOError(#[from] std::io::Error),
+    IoError(#[from] std::io::Error),
+
+    #[error(transparent)]
+    ChannelError(#[from] futures::channel::mpsc::TrySendError<DesktopdMessage>),
 }

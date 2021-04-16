@@ -2,28 +2,30 @@ use crate::browser::*;
 use crate::error::*;
 use crate::message::*;
 use crate::state::{GlobalState, Tx};
+use anyhow::Result;
 use async_std::net::{SocketAddr, TcpListener, TcpStream};
 use async_std::task;
 use async_tungstenite::tungstenite::protocol::Message;
 use futures::prelude::*;
 use futures::{channel::mpsc::unbounded, channel::mpsc::UnboundedSender, future, pin_mut};
-use log::{error, info, warn};
+use log::{error, info};
 use notify_rust::Notification;
 use std::env;
-use std::io;
 
 // ░█▀█░█░█░█▀▄░█░░░▀█▀░█▀▀
 // ░█▀▀░█░█░█▀▄░█░░░░█░░█░░
 // ░▀░░░▀▀▀░▀▀░░▀▀▀░▀▀▀░▀▀▀
 
-pub async fn run(state: GlobalState, sway_tx: Tx) -> Result<(), io::Error> {
+pub async fn run(state: GlobalState, sway_tx: Tx) -> Result<(), DesktopdError> {
     let addr = env::args()
         .nth(1)
         .unwrap_or_else(|| "127.0.0.1:8080".to_string());
 
     // Create the event loop and TCP listener we'll accept connections on.
-    let try_socket = TcpListener::bind(&addr).await;
-    let listener = try_socket.expect("Failed to bind");
+    let listener = TcpListener::bind(&addr)
+        .await
+        .map_err(|err| DesktopdError::IoError(err))?;
+
     info!("Listening on: {}", addr);
 
     while let Ok((stream, _)) = listener.accept().await {
@@ -37,16 +39,20 @@ pub async fn run(state: GlobalState, sway_tx: Tx) -> Result<(), io::Error> {
 // ░█▀▀░█▀▄░░█░░▀▄▀░█▀█░░█░░█▀▀
 // ░▀░░░▀░▀░▀▀▀░░▀░░▀░▀░░▀░░▀▀▀
 
-async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
+async fn accept_connection(
+    state: GlobalState,
+    sway_tx: Tx,
+    stream: TcpStream,
+) -> Result<(), DesktopdError> {
     let addr = stream
         .peer_addr()
-        .expect("connected streams should have a peer address");
+        .map_err(|err| DesktopdError::IoError(err))?;
 
     info!("Peer address: {}", addr);
 
     let ws_stream = async_tungstenite::accept_async(stream)
         .await
-        .expect("Error during the websocket handshake occurred");
+        .map_err(|err| DesktopdError::WebSocketError(err))?;
 
     info!("New WebSocket connection: {}", addr);
 
@@ -54,37 +60,29 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
     let (write, mut read) = ws_stream.split();
 
     info!("Waiting for init message from {}", addr);
-    let raw = read
+
+    let init = read
         .next()
         .await
-        .map(|m| m.and_then(|m| m.to_text().map(|t| t.to_owned())));
+        .map(|result| {
+            result
+                .map_err(|err| DesktopdError::WebSocketError(err))
+                .and_then(|msg| {
+                    msg.to_text()
+                        .map(|txt| txt.to_owned())
+                        .map_err(|err| DesktopdError::WebSocketError(err))
+                })
+                .and_then(|txt| {
+                    serde_json::from_str::<DesktopdMessage>(&txt)
+                        .map_err(|err| DesktopdError::SerializationError(err))
+                })
+        })
+        .unwrap_or(Err(DesktopdError::ConnectInitError))?;
 
-    if raw.is_none() {
-        warn!(
-            "Did not receive init message, ignoring connection attempt from {}.",
-            addr
-        );
-        return;
-    }
-
-    let msg = raw
-        .unwrap()
-        .map_err(|err| DesktopdError::WebSocketError(err))
-        .and_then(|t| {
-            serde_json::from_str::<DesktopdMessage>(&t)
-                .map_err(|err| DesktopdError::SerializationError(err))
-        });
-
-    if msg.is_err() {
-        warn!("Error processing init message from {}: {:#?}", addr, &msg);
-        return;
-    }
-
-    let init = msg.unwrap();
     info!("Init message received for {}: {:#?}", addr, &init);
 
     let init_state = state.clone();
-    handle_init_message(init_state, &addr, tx, init);
+    handle_init_message(init_state, &addr, tx, init)?;
 
     let answer_channel = rx
         .map(|msg| serde_json::to_string(&msg).unwrap())
@@ -106,9 +104,11 @@ async fn accept_connection(state: GlobalState, sway_tx: Tx, stream: TcpStream) {
     info!("{} disconnected", &addr);
     if let Some((conn, _)) = state.lock().unwrap().remove_peer(&addr) {
         if conn.is_browser() {
-            show_notification("Browser Plugin disconnected")
+            show_notification("Browser Plugin disconnected");
         }
     }
+
+    return Ok(());
 }
 
 fn show_notification(message: &str) {
@@ -156,11 +156,11 @@ fn handle_init_message(
     addr: &SocketAddr,
     tx: UnboundedSender<DesktopdMessage>,
     msg: DesktopdMessage,
-) {
+) -> Result<(), DesktopdError> {
     use DesktopdMessage::*;
     match msg {
         Connect(conn_type) => handle_connect(state, addr, tx, conn_type),
-        _ => warn!("Message was not an init message."),
+        _ => Err(DesktopdError::ConnectInitError),
     }
 }
 
@@ -169,23 +169,27 @@ fn handle_connect(
     addr: &SocketAddr,
     tx: UnboundedSender<DesktopdMessage>,
     tipe: ConnectionType,
-) {
+) -> Result<(), DesktopdError> {
+    use ConnectionType::*;
     let mut state = state.lock().unwrap();
     match tipe {
-        ConnectionType::Browser { .. } => {
+        Browser { .. } => {
             show_notification("Browser plugin connected");
             state.add_peer(tipe, *addr, tx);
+            Ok(())
         }
 
         // a new cli has connected, send the current list of clients
-        ConnectionType::Cli => {
+        Cli => {
             state.add_peer(tipe, *addr, tx);
-
             let clients = state.clients();
             let init = DesktopdMessage::ClientList { data: clients };
-            let peer: Tx = state.find_peer(&addr).unwrap().clone();
+            let peer: Tx = state
+                .find_peer(&addr)
+                .map(|handle| Ok(handle.clone()))
+                .unwrap_or(Err(DesktopdError::ConnectInitError))?;
             peer.unbounded_send(init)
-                .expect("Could not respond with client list");
+                .map_err(|err| DesktopdError::ChannelError(err))
         }
     }
 }

@@ -5,7 +5,6 @@ use crate::state::{Rx, Tx};
 use crate::sway::types::SwayWindow;
 use async_i3ipc::{
     event::{Event, Subscribe, WindowChange, WindowData},
-    reply::{FullscreenMode, Node, NodeLayout},
     I3,
 };
 use async_std::task;
@@ -172,67 +171,67 @@ fn mark_focused(state: GlobalState, data: &WindowData) {
     }
 }
 
-fn find_parent<'a>(node: &'a Node, tree: &'a Node) -> Option<&'a Node> {
-    let mut it_matches = false;
+// fn find_parent<'a>(node: &'a Node, tree: &'a Node) -> Option<&'a Node> {
+//     let mut it_matches = false;
+//
+//     for child in &tree.nodes {
+//         if it_matches {
+//             break;
+//         };
+//         it_matches = child.id == node.id;
+//     }
+//
+//     for child in &tree.floating_nodes {
+//         if it_matches {
+//             break;
+//         };
+//         it_matches = child.id == node.id;
+//     }
+//
+//     if it_matches {
+//         return Some(tree);
+//     }
+//
+//     for child in &tree.nodes {
+//         if let Some(parent) = find_parent(&node, &child) {
+//             return Some(parent);
+//         }
+//     }
+//
+//     for child in &tree.floating_nodes {
+//         if let Some(parent) = find_parent(&node, &child) {
+//             return Some(parent);
+//         }
+//     }
+//
+//     None
+// }
 
-    for child in &tree.nodes {
-        if it_matches {
-            break;
-        };
-        it_matches = child.id == node.id;
-    }
+// async fn maybe_split_container(i3: &mut I3, data: &WindowData) {
+//     let con = &data.container;
+//
+//     // if Some("desktopd-launcher".to_owned()) == con.app_id {
+//     //     return;
+//     // }
+//
+//     let tree = i3.get_tree().await.expect("I want my tree");
+//     let parent = find_parent(&con, &tree).expect("Container must have a parent");
+//     let is_not_floating = con.floating.is_none();
+//     let is_fullscreen = con.fullscreen_mode != FullscreenMode::None;
+//     let is_stacked = parent.layout == NodeLayout::Stacked;
+//     let is_tabbed = parent.layout == NodeLayout::Tabbed;
+//     let should_split = is_not_floating && !is_fullscreen && !is_stacked && !is_tabbed;
+//     if should_split {
+//         let new_layout = if con.rect.height > con.rect.width {
+//             "splitv"
+//         } else {
+//             "splith"
+//         };
+//         i3.run_command(new_layout).await.unwrap();
+//     }
+// }
 
-    for child in &tree.floating_nodes {
-        if it_matches {
-            break;
-        };
-        it_matches = child.id == node.id;
-    }
-
-    if it_matches {
-        return Some(tree);
-    }
-
-    for child in &tree.nodes {
-        if let Some(parent) = find_parent(&node, &child) {
-            return Some(parent);
-        }
-    }
-
-    for child in &tree.floating_nodes {
-        if let Some(parent) = find_parent(&node, &child) {
-            return Some(parent);
-        }
-    }
-
-    None
-}
-
-async fn maybe_split_container(i3: &mut I3, data: &WindowData) {
-    let con = &data.container;
-
-    // if Some("desktopd-launcher".to_owned()) == con.app_id {
-    //     return;
-    // }
-
-    let tree = i3.get_tree().await.expect("I want my tree");
-    let parent = find_parent(&con, &tree).expect("Container must have a parent");
-    let is_not_floating = con.floating.is_none();
-    let is_fullscreen = con.fullscreen_mode != FullscreenMode::None;
-    let is_stacked = parent.layout == NodeLayout::Stacked;
-    let is_tabbed = parent.layout == NodeLayout::Tabbed;
-    let should_split = is_not_floating && !is_fullscreen && !is_stacked && !is_tabbed;
-    if should_split {
-        let new_layout = if con.rect.height > con.rect.width {
-            "splitv"
-        } else {
-            "splith"
-        };
-        i3.run_command(new_layout).await.unwrap();
-    }
-}
-
-async fn handle_window_event(i3: &mut I3, state: GlobalState, data: WindowData) {
+async fn handle_window_event(_i3: &mut I3, state: GlobalState, data: WindowData) {
     info!("handleing {:#?} event", data.change);
     match data.change {
         WindowChange::Close => {
