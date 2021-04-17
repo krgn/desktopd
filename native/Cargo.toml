@@ -12,17 +12,17 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-async-i3ipc = { version = "0.2", features = ["sway"] }
-async-process = "1.0.1"
-async-std = { version = "1.6", features = ["attributes"] }
-async-tungstenite = { version = "0.10", features = ["async-std-runtime"]}
+async-i3ipc = { version = "0.3", features = ["sway"] }
+async-process = "1.0"
+async-std = { version = "1.9", features = ["attributes"] }
+async-tungstenite = { version = "0.13", features = ["async-std-runtime"]}
 env_logger = "0.8"
 futures = "0.3"
 log = "0.4"
-notify-rust = "4.0.0"
+notify-rust = "4.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-skim = "0.9.3"
+skim = "0.9"
 tabular = "0.1.4"
 thiserror = "1.0"
-url = "2.2.0"
+url = "2.2"
