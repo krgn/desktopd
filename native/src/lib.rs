@@ -8,10 +8,12 @@ extern crate serde_json;
 extern crate skim;
 extern crate tabular;
 extern crate thiserror;
+extern crate tide;
 extern crate url;
 
 pub mod browser;
 pub mod error;
+pub mod http;
 pub mod message;
 pub mod state;
 pub mod sway;

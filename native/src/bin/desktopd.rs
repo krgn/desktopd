@@ -1,5 +1,6 @@
 #![feature(async_closure)]
 use async_std::task;
+use desktopd::http;
 use desktopd::state::*;
 use desktopd::sway;
 use desktopd::websocket;
@@ -16,12 +17,21 @@ async fn main() -> io::Result<()> {
     let state = GlobalState::new(Mutex::new(State::new()));
 
     let ws_state = state.clone();
-    let sway_tx_handle = sway_tx.clone();
+    let ws_tx_handle = sway_tx.clone();
     task::spawn(async {
         info!("ws server starting");
-        websocket::run(ws_state, sway_tx_handle)
+        websocket::run(ws_state, ws_tx_handle)
             .await
             .expect("Websocket server failed");
+    });
+
+    let http_state = state.clone();
+    let http_tx_handle = sway_tx.clone();
+    task::spawn(async {
+        info!("http server starting");
+        http::run(http_state, http_tx_handle)
+            .await
+            .expect("Http server failed");
     });
 
     sway::connection::run(state, sway_tx, sway_rx).await

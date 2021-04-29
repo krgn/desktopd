@@ -10,6 +10,8 @@ use skim::prelude::*;
 use tabular::{Row, Table};
 use url::Url;
 
+const WIDTH: usize = 80;
+
 struct Wrapper {
     client: DesktopdClient,
     line: String,
@@ -27,6 +29,10 @@ type SinkHole = futures::stream::SplitSink<
 >;
 
 async fn run(tx_item: SkimItemSender) -> SinkHole {
+    let width = std::env::var("DSKTPD_CLIENT_WIDTH")
+        .map(|w| usize::from_str_radix(&w, 10).unwrap_or(WIDTH))
+        .unwrap_or(WIDTH);
+
     let (ws_stream, _) = connect_async("ws://127.0.0.1:8080")
         .await
         .unwrap_or_else(|e| {
@@ -72,8 +78,8 @@ async fn run(tx_item: SkimItemSender) -> SinkHole {
                 }
 
                 DesktopdClient::Tab { data } => {
-                    let formatted_title = if data.title.len() > 80 {
-                        format!("{}...", &data.title[0..80])
+                    let formatted_title = if data.title.len() > width {
+                        format!("{}...", &data.title[0..width])
                     } else {
                         data.title.clone()
                     };
